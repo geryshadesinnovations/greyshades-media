@@ -1,0 +1,33 @@
+# Environment
+.env
+
+# Storage (private uploads, logs, cache)
+storage/uploads/originals/*
+storage/uploads/thumbnails/*
+storage/uploads/pdf-previews/*
+storage/uploads/ppt-previews/*
+storage/uploads/hls/*
+storage/logs/*
+storage/cache/*
+!storage/uploads/originals/.gitkeep
+!storage/uploads/thumbnails/.gitkeep
+!storage/uploads/pdf-previews/.gitkeep
+!storage/uploads/ppt-previews/.gitkeep
+!storage/uploads/hls/.gitkeep
+!storage/logs/.gitkeep
+!storage/cache/.gitkeep
+
+# OS / Editors
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Composer
+/vendor/
+composer.lock
+
+# Backups
+*.bak
+*.sql.gz
