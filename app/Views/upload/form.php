@@ -2,7 +2,6 @@
 /**
  * @var array $sections
  * @var array $trees
- * @var array $occasions
  * @var int $maxMb
  * @var array $allowed
  */
@@ -10,17 +9,22 @@ use App\Core\Csrf;
 $this->extend('layouts/app');
 
 /**
- * Render a top-level category card (Gimmick / Art / Hybrid / Events / etc.)
- * Each card has its own scrollable body and a data-cat-root attribute that the
- * client uses to enforce mutual-exclusion rules between Gimmick and Art.
+ * Render a top-level category card (Gimmick / Art / Hybrid / Events).
+ * Each card has its own scrollable body and a data-cat-root attribute that
+ * the client uses to enforce mutual-exclusion rules between Gimmick and Art.
+ *
+ * NOTE: We no longer render an "All <Root>" master checkbox at the top of the
+ * card — the user picks specific subcategories and the backend auto-attaches
+ * the parent / root / section behind the scenes. The card header is now
+ * label-only (the root category is selected implicitly via its children).
  */
 $renderRootCard = function (array $node, string $sectionName, string $sectionCode, ?string $exclusiveGroup = null) use (&$renderTree) {
     $rootSlug = (string) $node['slug'];
-    echo '<div class="cat-card" data-cat-root="' . e($rootSlug) . '"';
+    echo '<div class="cat-card" data-cat-root="' . e($rootSlug) . '" data-root-id="' . (int) $node['id'] . '"';
     if ($exclusiveGroup) echo ' data-exclusive="' . e($exclusiveGroup) . '"';
     echo '>';
 
-    // Header
+    // Header — label only, no master checkbox
     echo '<button type="button" class="cat-card-header" data-accordion>';
     echo '<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>';
     echo '<span class="cat-card-name">' . e($node['name']) . '</span>';
@@ -28,14 +32,18 @@ $renderRootCard = function (array $node, string $sectionName, string $sectionCod
     echo '<span class="cat-card-count" hidden>0</span>';
     echo '</button>';
 
-    // Body (scrollable)
+    // Body (scrollable) — only subcategories, no "All <Root>" checkbox
     echo '<div class="cat-card-body">';
-    echo '<label class="cat-pick cat-pick-all"><input form="upload-form" type="checkbox" name="categories[]" value="' . (int)$node['id'] . '" data-section="' . e($sectionCode) . '" data-cat-root="' . e($rootSlug) . '"';
-    if ($exclusiveGroup) echo ' data-exclusive="' . e($exclusiveGroup) . '"';
-    echo '><span class="cat-pick-label"><strong>All ' . e($node['name']) . '</strong></span></label>';
-
     if (!empty($node['children'])) {
         $renderTree($node['children'], $sectionCode, $rootSlug, $exclusiveGroup, 0);
+    } else {
+        // Edge case: a root with no children — let the user pick the root itself.
+        echo '<label class="cat-pick">';
+        echo '<input form="upload-form" type="checkbox" name="categories[]" value="' . (int)$node['id'] . '" data-section="' . e($sectionCode) . '" data-cat-root="' . e($rootSlug) . '"';
+        if ($exclusiveGroup) echo ' data-exclusive="' . e($exclusiveGroup) . '"';
+        echo '>';
+        echo '<span class="cat-pick-label">' . e($node['name']) . '</span>';
+        echo '</label>';
     }
     echo '</div>';
     echo '</div>';
@@ -153,8 +161,10 @@ foreach ($sections as $s) {
                 </div>
                 <div class="form-section-body">
                     <p class="form-hint">
-                        Sections are decided automatically from the categories you tick.
+                        Pick the specific subcategories your file belongs to — the parent
+                        category (Gimmick / Art / Hybrid / Events) is assigned automatically.
                         <br><strong>Note:</strong> Gimmick and Art are mutually exclusive — Hybrid and Events can mix freely.
+                        Hybrid subcategories already cover all occasions (medical days, national festivals, etc.), so there's no separate Occasion picker.
                     </p>
 
                     <div id="cat-summary" class="cat-summary" hidden>
@@ -170,34 +180,7 @@ foreach ($sections as $s) {
                 </div>
             </div>
 
-            <!-- Section 3: Occasions -->
-            <div class="form-section">
-                <div class="form-section-title">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-                    Occasions <span class="muted">(optional)</span>
-                </div>
-                <div class="form-section-body">
-                    <?php foreach ($occasions as $code => $g): ?>
-                    <div class="cat-card">
-                        <button type="button" class="cat-card-header" data-accordion>
-                            <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
-                            <span class="cat-card-name"><?= e($g['name']) ?></span>
-                            <span class="cat-card-count" hidden>0</span>
-                        </button>
-                        <div class="cat-card-body">
-                            <?php foreach ($g['items'] as $o): ?>
-                            <label class="cat-pick">
-                                <input form="upload-form" type="checkbox" name="occasions[]" value="<?= (int) $o['id'] ?>" data-occasion="1">
-                                <span class="cat-pick-label"><?= e($o['name']) ?></span>
-                            </label>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-
-            <!-- Section 4: Settings -->
+            <!-- Section 3: Settings -->
             <div class="form-section">
                 <div class="form-section-title">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>

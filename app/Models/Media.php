@@ -224,8 +224,37 @@ final class Media
         if (!empty($filters['q'])) {
             $q = trim((string) $filters['q']);
             $like = '%' . $q . '%';
-            $where[] = "(m.title LIKE ? OR m.description LIKE ? OR m.keywords LIKE ?)";
+            // The text search now also matches against tag names, category
+            // names, and occasion names so that typing a tag (e.g. "diwali"
+            // or "campaign-2026") returns the media tagged with it even when
+            // that text never appears in the title/description.
+            $where[] = "(
+                m.title LIKE ?
+                OR m.description LIKE ?
+                OR m.keywords LIKE ?
+                OR EXISTS (
+                    SELECT 1 FROM media_tags mt2
+                    JOIN tags t2 ON t2.id = mt2.tag_id
+                    WHERE mt2.media_id = m.id
+                      AND (t2.name LIKE ? OR t2.slug LIKE ?)
+                )
+                OR EXISTS (
+                    SELECT 1 FROM media_categories mc2
+                    JOIN categories c2 ON c2.id = mc2.category_id
+                    WHERE mc2.media_id = m.id
+                      AND c2.name LIKE ?
+                )
+                OR EXISTS (
+                    SELECT 1 FROM media_occasions mo2
+                    JOIN occasions o2 ON o2.id = mo2.occasion_id
+                    WHERE mo2.media_id = m.id
+                      AND o2.name LIKE ?
+                )
+            )";
+            // 7 LIKE bindings, in the same order as the placeholders above.
             $params[] = $like; $params[] = $like; $params[] = $like;
+            $params[] = $like; $params[] = $like; $params[] = $like;
+            $params[] = $like;
         }
 
         $orderBy = match ($sort) {
@@ -294,5 +323,110 @@ final class Media
         return Database::all(
             "SELECT id, title, media_type, download_count FROM media ORDER BY download_count DESC LIMIT $limit"
         );
+    }
+
+    /**
+     * Lightweight, search-as-you-type suggestions for the topbar search box.
+     *
+     * Returns up to $limit hits across four buckets:
+     *   - media titles      (clickable -> opens that file)
+     *   - tag names         (clickable -> filter dashboard by that tag)
+     *   - category names    (clickable -> filter dashboard by that category)
+     *   - occasion names    (clickable -> filter dashboard by that occasion)
+     *
+     * Permission filtering is honoured for media titles via $allowedSections.
+     * Categories/occasions/tags are global metadata and are returned for
+     * every signed-in user.
+     */
+    public static function suggest(string $q, array $allowedSections, int $limit = 8): array
+    {
+        $q = trim($q);
+        if ($q === '' || mb_strlen($q) < 2) return [];
+
+        $like  = '%' . $q . '%';
+        $start = $q . '%';
+        $perBucket = max(2, min(8, $limit));
+
+        $out = [];
+
+        // -- Media titles (filtered by section visibility)
+        if ($allowedSections) {
+            $marks = implode(',', array_fill(0, count($allowedSections), '?'));
+            $params = array_merge($allowedSections, [$start, $like, $like]);
+            $rows = Database::all(
+                "SELECT m.uuid, m.title, m.media_type
+                 FROM media m JOIN sections s ON s.id = m.section_id
+                 WHERE s.code IN ($marks)
+                   AND (m.title LIKE ? OR m.description LIKE ? OR m.keywords LIKE ?)
+                 ORDER BY (m.title LIKE ?) DESC, m.is_featured DESC, m.created_at DESC
+                 LIMIT $perBucket",
+                array_merge($params, [$start])
+            );
+            foreach ($rows as $r) {
+                $out[] = [
+                    'type'  => 'media',
+                    'label' => $r['title'],
+                    'meta'  => strtoupper((string) $r['media_type']),
+                    'href'  => url('/media/' . $r['uuid']),
+                ];
+            }
+        }
+
+        // -- Tags
+        $rows = Database::all(
+            "SELECT id, name, slug FROM tags
+             WHERE name LIKE ? OR slug LIKE ?
+             ORDER BY (name LIKE ?) DESC, name
+             LIMIT $perBucket",
+            [$like, $like, $start]
+        );
+        foreach ($rows as $r) {
+            $out[] = [
+                'type'  => 'tag',
+                'label' => '#' . $r['name'],
+                'meta'  => 'TAG',
+                'href'  => url('/dashboard?tag=' . (int) $r['id']),
+            ];
+        }
+
+        // -- Categories (only those in sections the user can see)
+        if ($allowedSections) {
+            $marks = implode(',', array_fill(0, count($allowedSections), '?'));
+            $rows = Database::all(
+                "SELECT c.id, c.name, s.code AS section_code
+                 FROM categories c JOIN sections s ON s.id = c.section_id
+                 WHERE s.code IN ($marks) AND c.name LIKE ?
+                 ORDER BY (c.name LIKE ?) DESC, c.name
+                 LIMIT $perBucket",
+                array_merge($allowedSections, [$like, $start])
+            );
+            foreach ($rows as $r) {
+                $out[] = [
+                    'type'  => 'category',
+                    'label' => $r['name'],
+                    'meta'  => 'CATEGORY',
+                    'href'  => url('/dashboard?category=' . (int) $r['id']),
+                ];
+            }
+        }
+
+        // -- Occasions (still useful as a keyword alias for Hybrid days)
+        $rows = Database::all(
+            "SELECT id, name FROM occasions
+             WHERE name LIKE ?
+             ORDER BY (name LIKE ?) DESC, name
+             LIMIT $perBucket",
+            [$like, $start]
+        );
+        foreach ($rows as $r) {
+            $out[] = [
+                'type'  => 'occasion',
+                'label' => $r['name'],
+                'meta'  => 'OCCASION',
+                'href'  => url('/dashboard?occasion=' . (int) $r['id']),
+            ];
+        }
+
+        return array_slice($out, 0, $limit);
     }
 }
