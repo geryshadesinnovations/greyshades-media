@@ -10,7 +10,6 @@ use App\Core\Database;
 use App\Models\Category;
 use App\Models\Media;
 use App\Models\Section;
-use App\Models\Tag;
 use App\Services\MediaProcessor;
 
 final class UploadController
@@ -152,13 +151,6 @@ final class UploadController
             foreach (Category::ancestorIds($cid) as $aid) $expandedCatIds[$aid] = true;
         }
         Media::attachCategories($mediaId, array_keys($expandedCatIds));
-
-        $tagsCsv = (string) ($_POST['tags_csv'] ?? '');
-        if ($tagsCsv !== '') {
-            $names  = array_filter(array_map('trim', explode(',', $tagsCsv)));
-            $tagIds = Tag::findOrCreateMany($names);
-            Media::attachTags($mediaId, $tagIds);
-        }
 
         ActivityLog::record('media.upload', 'media', $mediaId, [
             'title' => $title, 'mime' => $mime, 'size' => filesize($absPath),

@@ -3,7 +3,6 @@
  * @var array $sections
  * @var array $trees
  * @var array $occasions
- * @var array $tags
  * @var array $result
  * @var array $filters
  * @var string $sort
@@ -24,7 +23,6 @@ $buildUrl = function (array $changes = []) use ($filters, $sort): string {
         'section'  => $filters['section_code'] ?? null,
         'category' => $filters['category_id']  ?? null,
         'occasion' => $filters['occasion_id']  ?? null,
-        'tag'      => $filters['tag_id']       ?? null,
         'type'     => $filters['media_type']   ?? null,
         'q'        => $filters['q']            ?? null,
         'sort'     => $sort !== 'newest' ? $sort : null,
@@ -61,10 +59,6 @@ $buildUrl = function (array $changes = []) use ($filters, $sort): string {
                 $occName = (string) (\App\Core\Database::scalar('SELECT name FROM occasions WHERE id = ?', [(int) $filters['occasion_id']]) ?? 'Occasion');
                 $activeChips[] = ['label' => 'Occasion: ' . $occName, 'href' => $buildUrl(['occasion' => null])];
             }
-            if (!empty($filters['tag_id'])) {
-                $tagName = (string) (\App\Core\Database::scalar('SELECT name FROM tags WHERE id = ?', [(int) $filters['tag_id']]) ?? 'Tag');
-                $activeChips[] = ['label' => '#' . $tagName, 'href' => $buildUrl(['tag' => null])];
-            }
             if (!empty($filters['media_type']))   $activeChips[] = ['label' => 'Type: ' . ucfirst((string) $filters['media_type']), 'href' => $buildUrl(['type' => null])];
         ?>
 
@@ -73,7 +67,6 @@ $buildUrl = function (array $changes = []) use ($filters, $sort): string {
                 <?php /* preserve current filters as hidden inputs so each select-change submits the FULL filter set */ ?>
                 <?php if (!empty($filters['q'])): ?>       <input type="hidden" name="q"        value="<?= e($filters['q']) ?>"><?php endif; ?>
                 <?php if (!empty($filters['category_id'])): ?><input type="hidden" name="category" value="<?= (int) $filters['category_id'] ?>"><?php endif; ?>
-                <?php if (!empty($filters['tag_id'])): ?>  <input type="hidden" name="tag"      value="<?= (int) $filters['tag_id'] ?>"><?php endif; ?>
 
                 <label class="select">
                     <span>Section</span>
@@ -95,11 +88,6 @@ $buildUrl = function (array $changes = []) use ($filters, $sort): string {
                     </select>
                 </label>
 
-                <?php /* Occasion picker removed: Hybrid subcategories in the sidebar
-                       already cover every awareness day / festival / wellness theme.
-                       Existing ?occasion=<id> URLs from autocomplete still work — they
-                       are preserved as a hidden input below so they aren't dropped
-                       when the user changes another filter. */ ?>
                 <?php if (!empty($filters['occasion_id'])): ?>
                     <input type="hidden" name="occasion" value="<?= (int) $filters['occasion_id'] ?>">
                 <?php endif; ?>
@@ -129,24 +117,12 @@ $buildUrl = function (array $changes = []) use ($filters, $sort): string {
                 <?php endforeach; ?>
             </div>
             <?php endif; ?>
-
-            <?php if (!empty($tags)): ?>
-            <div class="tag-strip">
-                <span class="active-label">Popular tags:</span>
-                <?php foreach ($tags as $t): ?>
-                <a class="chip <?= ($filters['tag_id'] ?? null) == $t['id'] ? 'active' : '' ?>"
-                   href="<?= e($buildUrl(['tag' => (($filters['tag_id'] ?? null) == $t['id']) ? null : (int) $t['id']])) ?>">
-                    #<?= e($t['name']) ?>
-                </a>
-                <?php endforeach; ?>
-            </div>
-            <?php endif; ?>
         </div>
 
         <div class="content-header">
             <h2>
                 <?php if (!empty($filters['q'])): ?>Search results for "<?= e($filters['q']) ?>"
-                <?php elseif (!empty($filters['section_code']) || !empty($filters['category_id']) || !empty($filters['occasion_id']) || !empty($filters['tag_id']) || !empty($filters['media_type'])): ?>Filtered media
+                <?php elseif (!empty($filters['section_code']) || !empty($filters['category_id']) || !empty($filters['occasion_id']) || !empty($filters['media_type'])): ?>Filtered media
                 <?php else: ?>All media<?php endif; ?>
             </h2>
             <span class="muted"><?= number_format($total) ?> item<?= $total === 1 ? '' : 's' ?></span>
