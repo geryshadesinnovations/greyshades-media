@@ -13,7 +13,6 @@ $this->extend('layouts/app');
 
 $attachedCatIds = array_map(fn ($c) => (int) $c['id'], $categories);
 $attachedOccIds = array_map(fn ($o) => (int) $o['id'], $occasions);
-$tagsCsv = implode(', ', array_map(fn ($t) => $t['name'], $tags));
 
 $renderCatTree = function ($nodes, $depth = 0) use (&$renderCatTree, $attachedCatIds) {
     foreach ($nodes as $n) {
@@ -33,7 +32,6 @@ $renderCatTree = function ($nodes, $depth = 0) use (&$renderCatTree, $attachedCa
             <label><span>Title</span><input name="title" value="<?= e($media['title']) ?>" required></label>
             <label><span>Description</span><textarea name="description" rows="4"><?= e($media['description']) ?></textarea></label>
             <label><span>Keywords</span><input name="keywords" value="<?= e($media['keywords']) ?>"></label>
-            <label><span>Tags (comma separated)</span><input name="tags_csv" value="<?= e($tagsCsv) ?>"></label>
 
             <fieldset>
                 <legend>Categorisation</legend>
