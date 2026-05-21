@@ -43,8 +43,6 @@ final class MediaController
             'media'        => $m,
             'section'      => $section,
             'categories'   => Media::categoriesFor((int) $m['id']),
-            'occasions'    => Media::occasionsFor((int) $m['id']),
-            'tags'         => [],
             'streamToken'  => $streamToken,
             'canDownload'  => $this->isDownloadable($m),
             'canEdit'      => Auth::canEdit() || Auth::isSuperAdmin(),
@@ -59,14 +57,18 @@ final class MediaController
         $m = Media::find($id);
         if (!$m) { http_response_code(404); echo view('errors/404', []); return; }
 
+        $sections = array_values(array_filter(
+            Section::all(),
+            fn ($s) => Auth::canSection($s['code'])
+        ));
+        $trees = [];
+        foreach ($sections as $s) $trees[$s['code']] = \App\Models\Category::tree((int) $s['id']);
+
         echo view('media/edit', [
             'media'      => $m,
             'categories' => Media::categoriesFor($id),
-            'occasions'  => Media::occasionsFor($id),
-            'tags'       => [],
-            'allOccasions' => \App\Models\Occasion::groupedAll(),
-            'sections'   => Section::all(),
-            'trees'      => $this->allTrees(),
+            'sections'   => $sections,
+            'trees'      => $trees,
         ]);
     }
 
@@ -87,10 +89,17 @@ final class MediaController
             'is_pinned'       => !empty($_POST['is_pinned']),
         ]);
 
-        if (isset($_POST['categories']))
-            Media::attachCategories($id, (array) $_POST['categories']);
-        if (isset($_POST['occasions']))
-            Media::attachOccasions($id, (array) $_POST['occasions']);
+        // Re-attach categories with full ancestor expansion (same logic as upload)
+        if (isset($_POST['categories'])) {
+            $catIds = array_filter(array_map('intval', (array) $_POST['categories']));
+            $expandedCatIds = [];
+            foreach ($catIds as $cid) {
+                foreach (\App\Models\Category::ancestorIds($cid) as $aid) {
+                    $expandedCatIds[$aid] = true;
+                }
+            }
+            Media::attachCategories($id, array_keys($expandedCatIds));
+        }
 
         ActivityLog::record('media.edit', 'media', $id);
         flash('success', 'Media updated.');

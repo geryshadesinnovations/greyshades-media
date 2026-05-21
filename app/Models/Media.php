@@ -171,17 +171,26 @@ final class Media
 
         $joinCat = '';
         if (!empty($filters['category_id'])) {
-            $ids = Category::descendantIds((int) $filters['category_id']);
+            $catId = (int) $filters['category_id'];
+            $ids = Category::descendantIds($catId);
             $marks = implode(',', array_fill(0, count($ids), '?'));
-            // Use LEFT JOIN + WHERE so we match media that has ANY of these
-            // categories in its media_categories junction table.
-            $joinCat = "INNER JOIN media_categories mc ON mc.media_id = m.id AND mc.category_id IN ($marks)";
+            // Match media that has ANY of these category IDs (the selected
+            // category + all its descendants) in its media_categories rows.
+            // We use EXISTS instead of INNER JOIN to avoid duplicates without
+            // needing DISTINCT which can hurt performance.
+            $where[] = "EXISTS (
+                SELECT 1 FROM media_categories mc
+                WHERE mc.media_id = m.id AND mc.category_id IN ($marks)
+            )";
             foreach ($ids as $cid) $params[] = $cid;
         }
 
         $joinOcc = '';
         if (!empty($filters['occasion_id'])) {
-            $joinOcc = "INNER JOIN media_occasions mo ON mo.media_id = m.id AND mo.occasion_id = ?";
+            $where[] = "EXISTS (
+                SELECT 1 FROM media_occasions mo
+                WHERE mo.media_id = m.id AND mo.occasion_id = ?
+            )";
             $params[] = (int) $filters['occasion_id'];
         }
 
@@ -233,13 +242,12 @@ final class Media
 
         $base = "FROM media m
                  INNER JOIN sections s ON s.id = m.section_id
-                 $joinCat $joinOcc
                  WHERE " . implode(' AND ', $where);
 
-        $total = (int) Database::scalar("SELECT COUNT(DISTINCT m.id) $base", $params);
+        $total = (int) Database::scalar("SELECT COUNT(*) $base", $params);
 
         $rows = Database::all(
-            "SELECT DISTINCT m.*, s.code AS section_code, s.name AS section_name
+            "SELECT m.*, s.code AS section_code, s.name AS section_name
              $base
              ORDER BY $orderBy
              LIMIT $perPage OFFSET $offset",

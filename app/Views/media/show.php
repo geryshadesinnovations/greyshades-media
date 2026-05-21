@@ -3,8 +3,6 @@
  * @var array $media
  * @var array $section
  * @var array $categories
- * @var array $occasions
- * @var array $tags
  * @var string $streamToken
  * @var bool $canDownload
  * @var bool $canEdit
@@ -49,7 +47,7 @@ $previewUrl = url('/preview/' . $media['uuid']);
         <?php elseif ($type === 'ppt'): ?>
             <div class="ppt-stage">
                 <img src="<?= e($previewUrl) ?>" alt="<?= e($media['title']) ?> preview">
-                <p class="muted">Presentations are shown as a secure first-slide preview. Full deck playback requires explicit permission.</p>
+                <p class="muted">Presentations are shown as a secure first-slide preview.</p>
             </div>
 
         <?php else: ?>
@@ -63,7 +61,7 @@ $previewUrl = url('/preview/' . $media['uuid']);
             <span class="badge"><?= strtoupper($type) ?></span>
             <span class="badge soft"><?= e($section['name']) ?></span>
             <?php if (!empty($media['duration_sec'])): ?>
-                <span class="badge soft">⏱ <?= e(format_duration($media['duration_sec'])) ?></span>
+                <span class="badge soft"><?= e(format_duration($media['duration_sec'])) ?></span>
             <?php endif; ?>
             <span class="badge soft"><?= e(format_bytes((int) $media['file_size'])) ?></span>
             <span class="muted"><?= e(date('d M Y', strtotime((string) $media['created_at']))) ?></span>
@@ -79,17 +77,6 @@ $previewUrl = url('/preview/' . $media['uuid']);
             <div class="chip-row">
                 <?php foreach ($categories as $c): ?>
                 <a class="chip" href="<?= url('/dashboard?category=' . (int)$c['id']) ?>"><?= e($c['name']) ?></a>
-                <?php endforeach; ?>
-            </div>
-        </section>
-        <?php endif; ?>
-
-        <?php if ($occasions): ?>
-        <section>
-            <h3>Occasions</h3>
-            <div class="chip-row">
-                <?php foreach ($occasions as $o): ?>
-                <a class="chip" href="<?= url('/dashboard?occasion=' . (int)$o['id']) ?>"><?= e($o['name']) ?></a>
                 <?php endforeach; ?>
             </div>
         </section>
