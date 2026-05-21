@@ -2,7 +2,10 @@
  * - Drag & drop file picker with progress + media preview
  * - Category selection drives the section (no separate section checkboxes)
  * - Mutual-exclusion between Gimmick and Art (data-exclusive="gimmick-art")
- * - Auto-tick parent category when a child is selected (recursively)
+ * - The user picks specific subcategories only — the parent / root category
+ *   ("Gimmick", "Art", "Hybrid", "Events") is no longer a selectable
+ *   checkbox in the UI. The backend auto-attaches the entire ancestor
+ *   chain when storing the upload so dashboard filters keep working.
  * - Live "Selected" summary chips at the top of the categories panel
  * - Live count badge on each category accordion header
  *
@@ -236,33 +239,6 @@
         });
     };
 
-    /**
-     * Auto-tick the "All <Root>" checkbox AND every nested-parent checkbox up
-     * the .cat-sub chain, so that picking "Pop-up" implies "Gimmick" and
-     * picking a deep leaf implies the whole branch above it.
-     */
-    const ensureAncestorsTicked = (cb) => {
-        if (!cb.checked) return;
-
-        // Walk up nested .cat-sub blocks: each .cat-sub > .cat-sub-header has
-        // its own checkbox that represents the sub-parent.
-        let node = cb.closest('.cat-sub');
-        while (node) {
-            const parentCb = node.querySelector(':scope > .cat-sub-header input[type="checkbox"][name="categories[]"]');
-            if (parentCb && parentCb !== cb && !parentCb.checked) {
-                parentCb.checked = true;
-            }
-            node = node.parentElement?.closest('.cat-sub') || null;
-        }
-
-        // Always tick the "All <Root>" checkbox at the top of the card.
-        const card = cb.closest('.cat-card');
-        if (card) {
-            const all = card.querySelector('.cat-pick-all input[type="checkbox"][name="categories[]"]');
-            if (all && all !== cb && !all.checked) all.checked = true;
-        }
-    };
-
     /** Update count badge on each card header + the summary chips at top. */
     const refreshCounts = () => {
         document.querySelectorAll('.cat-card').forEach(card => {
@@ -284,8 +260,14 @@
                 summaryWrap.hidden = false;
                 summaryChips.innerHTML = ticked.map(cb => {
                     const label = cb.closest('label')?.querySelector('.cat-pick-label')?.textContent?.trim() || '';
+                    // Prefix the chip with the implicit parent root name so
+                    // the user can see at a glance that picking "Pop-up"
+                    // means the file lives under "Gimmick".
+                    const card = cb.closest('.cat-card');
+                    const rootName = card?.querySelector('.cat-card-name')?.textContent?.trim() || '';
+                    const display = rootName && rootName !== label ? rootName + ' › ' + label : label;
                     return '<button type="button" class="cat-summary-chip" data-uncheck="' + escapeHtml(cb.value) + '">' +
-                           escapeHtml(label) +
+                           escapeHtml(display) +
                            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
                            '</button>';
                 }).join('');
@@ -309,7 +291,6 @@
     catCheckboxes().forEach(cb => {
         cb.addEventListener('change', () => {
             applyExclusion(cb);
-            ensureAncestorsTicked(cb);
             refreshCardStates();
             refreshCounts();
         });

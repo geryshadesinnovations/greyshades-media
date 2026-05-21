@@ -95,17 +95,6 @@ $previewUrl = url('/preview/' . $media['uuid']);
         </section>
         <?php endif; ?>
 
-        <?php if ($tags): ?>
-        <section>
-            <h3>Tags</h3>
-            <div class="chip-row">
-                <?php foreach ($tags as $t): ?>
-                <a class="chip" href="<?= url('/dashboard?tag=' . (int)$t['id']) ?>">#<?= e($t['name']) ?></a>
-                <?php endforeach; ?>
-            </div>
-        </section>
-        <?php endif; ?>
-
         <div class="info-actions">
             <?php if ($canDownload): ?>
                 <a class="btn-primary" href="<?= url('/download/' . $media['uuid']) ?>">

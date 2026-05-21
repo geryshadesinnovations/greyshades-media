@@ -9,9 +9,7 @@ use App\Core\Csrf;
 use App\Core\Database;
 use App\Models\Category;
 use App\Models\Media;
-use App\Models\Occasion;
 use App\Models\Section;
-use App\Models\Tag;
 use App\Services\MediaProcessor;
 
 final class UploadController
@@ -30,7 +28,6 @@ final class UploadController
         echo view('upload/form', [
             'sections'  => $sections,
             'trees'     => $trees,
-            'occasions' => Occasion::groupedAll(),
             'maxMb'     => (int) config('storage.upload_max_mb', 2048),
             'allowed'   => (array) config('media.allowed_mimes', []),
         ]);
@@ -143,18 +140,17 @@ final class UploadController
             'processing_status' => 'ready',
         ]);
 
-        // Categories / occasions / tags
-        Media::attachCategories($mediaId, $catIds);
-
-        $occs = array_filter((array) ($_POST['occasions'] ?? []));
-        if ($occs) Media::attachOccasions($mediaId, $occs);
-
-        $tagsCsv = (string) ($_POST['tags_csv'] ?? '');
-        if ($tagsCsv !== '') {
-            $names  = array_filter(array_map('trim', explode(',', $tagsCsv)));
-            $tagIds = Tag::findOrCreateMany($names);
-            Media::attachTags($mediaId, $tagIds);
+        // Categories / tags. The user only ticks specific subcategories — the
+        // backend automatically attaches the entire ancestor chain (including
+        // the root "Gimmick"/"Art"/"Hybrid"/"Events" parent) so dashboard
+        // category filters work whether the visitor browses by leaf or by
+        // root. This replaces the "All <Root>" master checkbox we used to
+        // render in the upload form.
+        $expandedCatIds = [];
+        foreach ($catIds as $cid) {
+            foreach (Category::ancestorIds($cid) as $aid) $expandedCatIds[$aid] = true;
         }
+        Media::attachCategories($mediaId, array_keys($expandedCatIds));
 
         ActivityLog::record('media.upload', 'media', $mediaId, [
             'title' => $title, 'mime' => $mime, 'size' => filesize($absPath),

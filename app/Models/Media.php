@@ -81,18 +81,6 @@ final class Media
         }
     }
 
-    public static function attachTags(int $mediaId, array $tagIds): void
-    {
-        Database::execute("DELETE FROM media_tags WHERE media_id = ?", [$mediaId]);
-        foreach (array_unique(array_map('intval', $tagIds)) as $tid) {
-            if ($tid <= 0) continue;
-            Database::execute(
-                "INSERT IGNORE INTO media_tags (media_id, tag_id) VALUES (?,?)",
-                [$mediaId, $tid]
-            );
-        }
-    }
-
     public static function categoriesFor(int $mediaId): array
     {
         return Database::all(
@@ -110,15 +98,6 @@ final class Media
              JOIN occasions o ON o.id = mo.occasion_id
              JOIN occasion_groups g ON g.id = o.group_id
              WHERE mo.media_id = ? ORDER BY o.name",
-            [$mediaId]
-        );
-    }
-
-    public static function tagsFor(int $mediaId): array
-    {
-        return Database::all(
-            "SELECT t.* FROM media_tags mt JOIN tags t ON t.id = mt.tag_id
-             WHERE mt.media_id = ? ORDER BY t.name",
             [$mediaId]
         );
     }
@@ -194,6 +173,8 @@ final class Media
         if (!empty($filters['category_id'])) {
             $ids = Category::descendantIds((int) $filters['category_id']);
             $marks = implode(',', array_fill(0, count($ids), '?'));
+            // Use LEFT JOIN + WHERE so we match media that has ANY of these
+            // categories in its media_categories junction table.
             $joinCat = "INNER JOIN media_categories mc ON mc.media_id = m.id AND mc.category_id IN ($marks)";
             foreach ($ids as $cid) $params[] = $cid;
         }
@@ -202,12 +183,6 @@ final class Media
         if (!empty($filters['occasion_id'])) {
             $joinOcc = "INNER JOIN media_occasions mo ON mo.media_id = m.id AND mo.occasion_id = ?";
             $params[] = (int) $filters['occasion_id'];
-        }
-
-        $joinTag = '';
-        if (!empty($filters['tag_id'])) {
-            $joinTag = "INNER JOIN media_tags mt ON mt.media_id = m.id AND mt.tag_id = ?";
-            $params[] = (int) $filters['tag_id'];
         }
 
         if (!empty($filters['media_type'])) {
@@ -224,8 +199,25 @@ final class Media
         if (!empty($filters['q'])) {
             $q = trim((string) $filters['q']);
             $like = '%' . $q . '%';
-            $where[] = "(m.title LIKE ? OR m.description LIKE ? OR m.keywords LIKE ?)";
+            $where[] = "(
+                m.title LIKE ?
+                OR m.description LIKE ?
+                OR m.keywords LIKE ?
+                OR EXISTS (
+                    SELECT 1 FROM media_categories mc2
+                    JOIN categories c2 ON c2.id = mc2.category_id
+                    WHERE mc2.media_id = m.id
+                      AND c2.name LIKE ?
+                )
+                OR EXISTS (
+                    SELECT 1 FROM media_occasions mo2
+                    JOIN occasions o2 ON o2.id = mo2.occasion_id
+                    WHERE mo2.media_id = m.id
+                      AND o2.name LIKE ?
+                )
+            )";
             $params[] = $like; $params[] = $like; $params[] = $like;
+            $params[] = $like; $params[] = $like;
         }
 
         $orderBy = match ($sort) {
@@ -241,7 +233,7 @@ final class Media
 
         $base = "FROM media m
                  INNER JOIN sections s ON s.id = m.section_id
-                 $joinCat $joinOcc $joinTag
+                 $joinCat $joinOcc
                  WHERE " . implode(' AND ', $where);
 
         $total = (int) Database::scalar("SELECT COUNT(DISTINCT m.id) $base", $params);
@@ -294,5 +286,92 @@ final class Media
         return Database::all(
             "SELECT id, title, media_type, download_count FROM media ORDER BY download_count DESC LIMIT $limit"
         );
+    }
+
+    /**
+     * Lightweight, search-as-you-type suggestions for the topbar search box.
+     *
+     * Returns up to $limit hits across three buckets:
+     *   - media titles      (clickable -> opens that file)
+     *   - category names    (clickable -> filter dashboard by that category)
+     *   - occasion names    (clickable -> filter dashboard by that occasion)
+     *
+     * Permission filtering is honoured for media titles via $allowedSections.
+     * Categories/occasions are global metadata and are returned for
+     * every signed-in user.
+     */
+    public static function suggest(string $q, array $allowedSections, int $limit = 8): array
+    {
+        $q = trim($q);
+        if ($q === '' || mb_strlen($q) < 2) return [];
+
+        $like  = '%' . $q . '%';
+        $start = $q . '%';
+        $perBucket = max(2, min(8, $limit));
+
+        $out = [];
+
+        // -- Media titles (filtered by section visibility)
+        if ($allowedSections) {
+            $marks = implode(',', array_fill(0, count($allowedSections), '?'));
+            $params = array_merge($allowedSections, [$start, $like, $like]);
+            $rows = Database::all(
+                "SELECT m.uuid, m.title, m.media_type
+                 FROM media m JOIN sections s ON s.id = m.section_id
+                 WHERE s.code IN ($marks)
+                   AND (m.title LIKE ? OR m.description LIKE ? OR m.keywords LIKE ?)
+                 ORDER BY (m.title LIKE ?) DESC, m.is_featured DESC, m.created_at DESC
+                 LIMIT $perBucket",
+                array_merge($params, [$start])
+            );
+            foreach ($rows as $r) {
+                $out[] = [
+                    'type'  => 'media',
+                    'label' => $r['title'],
+                    'meta'  => strtoupper((string) $r['media_type']),
+                    'href'  => url('/media/' . $r['uuid']),
+                ];
+            }
+        }
+
+        // -- Categories (only those in sections the user can see)
+        if ($allowedSections) {
+            $marks = implode(',', array_fill(0, count($allowedSections), '?'));
+            $rows = Database::all(
+                "SELECT c.id, c.name, s.code AS section_code
+                 FROM categories c JOIN sections s ON s.id = c.section_id
+                 WHERE s.code IN ($marks) AND c.name LIKE ?
+                 ORDER BY (c.name LIKE ?) DESC, c.name
+                 LIMIT $perBucket",
+                array_merge($allowedSections, [$like, $start])
+            );
+            foreach ($rows as $r) {
+                $out[] = [
+                    'type'  => 'category',
+                    'label' => $r['name'],
+                    'meta'  => 'CATEGORY',
+                    'href'  => url('/dashboard?category=' . (int) $r['id']),
+                ];
+            }
+        }
+
+        // -- Occasions (still useful as a keyword alias for Hybrid days)
+        $rows = Database::all(
+            "SELECT id, name FROM occasions
+             WHERE name LIKE ?
+             ORDER BY (name LIKE ?) DESC, name
+             LIMIT $perBucket",
+            [$like, $start]
+        );
+        foreach ($rows as $r) {
+            $out[] = [
+                'type'  => 'occasion',
+                'label' => $r['name'],
+                'meta'  => 'OCCASION',
+                'href'  => url('/dashboard?occasion=' . (int) $r['id']),
+            ];
+        }
+
+        return array_slice($out, 0, $limit);
     }
 }

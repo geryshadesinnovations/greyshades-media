@@ -66,6 +66,31 @@ final class Category
         return $out;
     }
 
+    /**
+     * All ancestor IDs of $id (inclusive of $id itself), walking up via
+     * parent_id. Used by the upload flow so that picking a leaf subcategory
+     * automatically attaches the entire chain (root + intermediate parents),
+     * which means dashboard filters by either leaf or root return the file.
+     *
+     * Returned order: leaf -> root.
+     */
+    public static function ancestorIds(int $id): array
+    {
+        $out = [];
+        $cur = $id;
+        $seen = [];
+        // Hard cap to defend against any accidental cycle in the tree.
+        for ($i = 0; $i < 32 && $cur > 0; $i++) {
+            if (isset($seen[$cur])) break;
+            $seen[$cur] = true;
+            $row = Database::first("SELECT id, parent_id FROM categories WHERE id = ?", [$cur]);
+            if (!$row) break;
+            $out[] = (int) $row['id'];
+            $cur = $row['parent_id'] !== null ? (int) $row['parent_id'] : 0;
+        }
+        return $out;
+    }
+
     public static function create(int $sectionId, ?int $parentId, string $name): int
     {
         $slug = slugify($name);
