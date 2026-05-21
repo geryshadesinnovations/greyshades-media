@@ -95,19 +95,14 @@ $buildUrl = function (array $changes = []) use ($filters, $sort): string {
                     </select>
                 </label>
 
-                <label class="select">
-                    <span>Occasion</span>
-                    <select name="occasion" onchange="this.form.submit()">
-                        <option value="">Any occasion</option>
-                        <?php foreach ($occasions as $code => $g): ?>
-                        <optgroup label="<?= e($g['name']) ?>">
-                            <?php foreach ($g['items'] as $o): ?>
-                            <option value="<?= (int) $o['id'] ?>" <?= ($filters['occasion_id'] ?? null) == $o['id'] ? 'selected' : '' ?>><?= e($o['name']) ?></option>
-                            <?php endforeach; ?>
-                        </optgroup>
-                        <?php endforeach; ?>
-                    </select>
-                </label>
+                <?php /* Occasion picker removed: Hybrid subcategories in the sidebar
+                       already cover every awareness day / festival / wellness theme.
+                       Existing ?occasion=<id> URLs from autocomplete still work — they
+                       are preserved as a hidden input below so they aren't dropped
+                       when the user changes another filter. */ ?>
+                <?php if (!empty($filters['occasion_id'])): ?>
+                    <input type="hidden" name="occasion" value="<?= (int) $filters['occasion_id'] ?>">
+                <?php endif; ?>
 
                 <label class="select">
                     <span>Sort by</span>

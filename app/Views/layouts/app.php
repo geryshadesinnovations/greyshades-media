@@ -28,9 +28,10 @@ $theme = $_COOKIE['theme'] ?? 'dark';
     </a>
 
     <?php if ($user): ?>
-    <form class="topbar-search" method="get" action="<?= url('/dashboard') ?>">
+    <form class="topbar-search" method="get" action="<?= url('/dashboard') ?>" autocomplete="off" data-search-suggest>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input type="search" name="q" placeholder="Search media, tags, occasions..." value="<?= e($_GET['q'] ?? '') ?>" autocomplete="off">
+        <input type="search" name="q" placeholder="Search media, tags, occasions..." value="<?= e($_GET['q'] ?? '') ?>" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="search-suggest-list">
+        <ul class="search-suggest" id="search-suggest-list" role="listbox" hidden></ul>
     </form>
 
     <nav class="topbar-actions">
@@ -83,6 +84,7 @@ $theme = $_COOKIE['theme'] ?? 'dark';
 </main>
 
 <script src="<?= asset('js/app.js') ?>" defer></script>
+<script src="<?= asset('js/search-suggest.js') ?>" defer></script>
 <?php if ($secInspect): ?>
 <script src="<?= asset('js/security.js') ?>" defer></script>
 <?php endif; ?>
