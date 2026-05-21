@@ -10,6 +10,7 @@ use App\Controllers\AdminController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
 use App\Controllers\MediaController;
+use App\Controllers\SearchController;
 use App\Controllers\StreamController;
 use App\Controllers\UploadController;
 use App\Core\Middleware\RequireAdmin;
@@ -23,6 +24,7 @@ $router->post('/logout',  [AuthController::class, 'logout'], [RequireAuth::class
 
 // Authenticated dashboard / media browsing
 $router->get('/dashboard',         [DashboardController::class, 'index'],   [RequireAuth::class]);
+$router->get('/search/suggest',    [SearchController::class, 'suggest'],    [RequireAuth::class]);
 $router->get('/media/{uuid}',      [MediaController::class, 'show'],        [RequireAuth::class]);
 $router->get('/media/{id}/edit',   [MediaController::class, 'edit'],        [RequireAuth::class]);
 $router->post('/media/{id}',       [MediaController::class, 'update'],      [RequireAuth::class]);
