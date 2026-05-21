@@ -9,12 +9,12 @@ $selectedCat = isset($filters['category_id']) ? (int) $filters['category_id'] : 
 $selectedSec = $filters['section_code'] ?? null;
 
 // Build a URL preserving non-conflicting filters (e.g. clicking a category
-// keeps the active occasion/tag/type/sort but replaces any prior category
-// or section selection).
+// keeps the active occasion/type/sort but replaces any prior category
+// or section selection). When a category is picked, the section filter is
+// automatically cleared since the category already implies a section.
 $navUrl = function (array $changes) use ($filters, $sort): string {
     $qs = array_filter([
         'occasion' => $filters['occasion_id'] ?? null,
-        'tag'      => $filters['tag_id']      ?? null,
         'type'     => $filters['media_type']  ?? null,
         'q'        => $filters['q']           ?? null,
         'sort'     => $sort !== 'newest' ? $sort : null,
@@ -25,6 +25,10 @@ $navUrl = function (array $changes) use ($filters, $sort): string {
         } else {
             $qs[$k] = $v;
         }
+    }
+    // If a category is being set, don't also send section — category is more specific
+    if (!empty($qs['category'])) {
+        unset($qs['section']);
     }
     return '?' . http_build_query($qs);
 };

@@ -53,6 +53,11 @@ $renderRootCard = function (array $node, string $sectionName, string $sectionCod
  * Render the children of a category card recursively. The data-section /
  * data-cat-root / data-exclusive attributes propagate down so all checkboxes
  * inside a card share the same exclusion group.
+ *
+ * IMPORTANT: Only LEAF categories (those with no children) get a selectable
+ * checkbox. Parent/intermediate categories are rendered as collapsible
+ * accordion headers (label only, no checkbox). The backend auto-attaches
+ * all ancestors when the user picks a leaf, so filtering by any level works.
  */
 $renderTree = function (array $nodes, string $sectionCode, string $rootSlug, ?string $exclusiveGroup, int $depth) use (&$renderTree) {
     foreach ($nodes as $n) {
@@ -62,20 +67,18 @@ $renderTree = function (array $nodes, string $sectionCode, string $rootSlug, ?st
         if ($exclusiveGroup) $extraAttrs .= ' data-exclusive="' . e($exclusiveGroup) . '"';
 
         if ($hasChildren) {
-            // Render as nested accordion
+            // Parent category — render as non-selectable accordion header
             echo '<div class="cat-sub" style="margin-left:' . $indent . 'px">';
             echo '<button type="button" class="cat-sub-header" data-accordion>';
             echo '<svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>';
-            echo '<label class="cat-pick cat-pick-inline" onclick="event.stopPropagation()">';
-            echo '<input form="upload-form" type="checkbox" name="categories[]" value="' . (int)$n['id'] . '"' . $extraAttrs . '>';
-            echo '<span class="cat-pick-label">' . e($n['name']) . '</span>';
-            echo '</label>';
+            echo '<span class="cat-pick-label" style="font-weight:600">' . e($n['name']) . '</span>';
             echo '</button>';
             echo '<div class="cat-sub-body">';
             $renderTree($n['children'], $sectionCode, $rootSlug, $exclusiveGroup, $depth + 1);
             echo '</div>';
             echo '</div>';
         } else {
+            // Leaf category — selectable checkbox
             echo '<label class="cat-pick" style="margin-left:' . $indent . 'px">';
             echo '<input form="upload-form" type="checkbox" name="categories[]" value="' . (int)$n['id'] . '"' . $extraAttrs . '>';
             echo '<span class="cat-pick-label">' . e($n['name']) . '</span>';
@@ -149,7 +152,7 @@ foreach ($sections as $s) {
                     <label><span>Title</span><input form="upload-form" type="text" name="title" placeholder="Auto-fills from filename"></label>
                     <label><span>Description</span><textarea form="upload-form" name="description" rows="3"></textarea></label>
                     <label><span>Keywords</span><input form="upload-form" type="text" name="keywords" placeholder="Separate with commas"></label>
-                    <label><span>Tags</span><input form="upload-form" type="text" name="tags_csv" placeholder="awareness, campaign, 2026"></label>
+
                 </div>
             </div>
 

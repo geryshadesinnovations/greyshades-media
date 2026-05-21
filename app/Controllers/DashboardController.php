@@ -8,7 +8,6 @@ use App\Models\Category;
 use App\Models\Media;
 use App\Models\Occasion;
 use App\Models\Section;
-use App\Models\Tag;
 
 final class DashboardController
 {
@@ -20,7 +19,6 @@ final class DashboardController
             'section_code' => $_GET['section']  ?? null,
             'category_id'  => isset($_GET['category']) ? (int) $_GET['category'] : null,
             'occasion_id'  => isset($_GET['occasion']) ? (int) $_GET['occasion'] : null,
-            'tag_id'       => isset($_GET['tag'])      ? (int) $_GET['tag']      : null,
             'media_type'   => $_GET['type']     ?? null,
             'q'            => $_GET['q']        ?? null,
             'featured'     => !empty($_GET['featured']),
@@ -40,7 +38,6 @@ final class DashboardController
             'sections'     => array_values($sections),
             'trees'        => $trees,
             'occasions'    => Occasion::groupedAll(),
-            'tags'         => Tag::popular(40),
             'result'       => $result,
             'filters'      => $filters,
             'sort'         => $sort,
