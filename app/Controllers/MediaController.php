@@ -44,7 +44,7 @@ final class MediaController
             'section'      => $section,
             'categories'   => Media::categoriesFor((int) $m['id']),
             'occasions'    => Media::occasionsFor((int) $m['id']),
-            'tags'         => Media::tagsFor((int) $m['id']),
+            'tags'         => [],
             'streamToken'  => $streamToken,
             'canDownload'  => $this->isDownloadable($m),
             'canEdit'      => Auth::canEdit() || Auth::isSuperAdmin(),
@@ -63,7 +63,7 @@ final class MediaController
             'media'      => $m,
             'categories' => Media::categoriesFor($id),
             'occasions'  => Media::occasionsFor($id),
-            'tags'       => Media::tagsFor($id),
+            'tags'       => [],
             'allOccasions' => \App\Models\Occasion::groupedAll(),
             'sections'   => Section::all(),
             'trees'      => $this->allTrees(),
@@ -91,11 +91,6 @@ final class MediaController
             Media::attachCategories($id, (array) $_POST['categories']);
         if (isset($_POST['occasions']))
             Media::attachOccasions($id, (array) $_POST['occasions']);
-        if (isset($_POST['tags_csv'])) {
-            $names = array_filter(array_map('trim', explode(',', (string) $_POST['tags_csv'])));
-            $tagIds = \App\Models\Tag::findOrCreateMany($names);
-            Media::attachTags($id, $tagIds);
-        }
 
         ActivityLog::record('media.edit', 'media', $id);
         flash('success', 'Media updated.');
