@@ -59,6 +59,7 @@ $theme = $_COOKIE['theme'] ?? 'dark';
                 <a href="<?= url('/admin') ?>">Admin Dashboard</a>
                 <a href="<?= url('/admin/users') ?>">Users</a>
                 <a href="<?= url('/admin/categories') ?>">Categories</a>
+                <a href="<?= url('/admin/companies') ?>">Companies</a>
                 <a href="<?= url('/admin/activity') ?>">Activity Log</a>
                 <hr>
                 <?php endif; ?>
