@@ -114,7 +114,7 @@ foreach ($sections as $s) {
                 <?= Csrf::field() ?>
 
                 <div id="drop-area" class="drop-area">
-                    <input type="file" id="file-input" name="file" accept="<?= e(implode(',', $allowed)) ?>" hidden>
+                    <input type="file" id="file-input" name="file" accept=".mp4,.png,.jpg,.jpeg,.webp,.gif,.pdf,.ppt,.pptx" hidden>
                     <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
                     <h3>Drag &amp; drop a file</h3>
                     <p>or <button type="button" class="link-btn" id="browse-btn">browse from your device</button></p>
@@ -149,10 +149,22 @@ foreach ($sections as $s) {
                     Basic information
                 </div>
                 <div class="form-section-body">
-                    <label><span>Title</span><input form="upload-form" type="text" name="title" placeholder="Auto-fills from filename"></label>
+                    <label><span>Title</span><input form="upload-form" type="text" name="title" placeholder="Auto-fills from filename" required></label>
                     <label><span>Description</span><textarea form="upload-form" name="description" rows="3"></textarea></label>
                     <label><span>Keywords</span><input form="upload-form" type="text" name="keywords" placeholder="Separate with commas"></label>
 
+                    <label><span>Company</span>
+                    <select form="upload-form" name="company_id">
+                        <option value="">— None —</option>
+                        <?php foreach ($companies as $co): ?>
+                        <option value="<?= (int)$co['id'] ?>"><?= e($co['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    </label>
+
+                    <label><span>Thumbnail (required for Video, PPT, PDF)</span>
+                    <input form="upload-form" type="file" name="thumbnail" accept=".jpg,.jpeg,.png,.webp">
+                    </label>
                 </div>
             </div>
 

@@ -10,7 +10,7 @@ $icon = match ($type) {
 };
 $dur = format_duration($m['duration_sec'] ?? null);
 ?>
-<a class="media-card" href="<?= url('/media/' . $m['uuid']) ?>" data-type="<?= e($type) ?>">
+<a class="media-card" href="<?= url('/media/' . $m['uuid']) ?>" data-type="<?= e($type) ?>"<?php if ($type === 'video'): ?> data-preview-src="<?= url('/stream/' . $m['uuid'] . '?token=' . \App\Core\StreamToken::issue((int)$m['id'])) ?>"<?php endif; ?>>
     <div class="media-thumb">
         <img loading="lazy" src="<?= url('/thumb/' . $m['uuid']) ?>" alt="<?= e($m['title']) ?>">
         <?php if ($type === 'video'): ?>

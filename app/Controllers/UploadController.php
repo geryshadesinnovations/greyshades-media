@@ -8,6 +8,7 @@ use App\Core\Auth;
 use App\Core\Csrf;
 use App\Core\Database;
 use App\Models\Category;
+use App\Models\Company;
 use App\Models\Media;
 use App\Models\Section;
 use App\Services\MediaProcessor;
@@ -30,6 +31,7 @@ final class UploadController
             'trees'     => $trees,
             'maxMb'     => (int) config('storage.upload_max_mb', 2048),
             'allowed'   => (array) config('media.allowed_mimes', []),
+            'companies' => Company::all(),
         ]);
     }
 
@@ -117,10 +119,30 @@ final class UploadController
         // Generate previews
         [$thumbRel, $previewRel, $hlsMasterRel, $duration, $w, $h] = $this->processMedia($absPath, $mime, $type, $uuid);
 
+        // Custom thumbnail upload overrides auto-generated one
+        if (!empty($_FILES['thumbnail']) && ($_FILES['thumbnail']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            $thumbFile = $_FILES['thumbnail'];
+            $thumbMime = mime_content_type($thumbFile['tmp_name']) ?: '';
+            if (in_array($thumbMime, ['image/jpeg','image/png','image/webp'], true)) {
+                $thumbDir = '/uploads/thumbnails/' . date('Y/m');
+                $absThumbDir = storage_path($thumbDir);
+                if (!is_dir($absThumbDir)) @mkdir($absThumbDir, 0775, true);
+                $thumbExt = match($thumbMime) {
+                    'image/png' => 'png',
+                    'image/webp' => 'webp',
+                    default => 'jpg',
+                };
+                $thumbRel = $thumbDir . '/' . $uuid . '-custom.' . $thumbExt;
+                move_uploaded_file($thumbFile['tmp_name'], storage_path($thumbRel));
+            }
+        }
+
         // Insert DB row
+        $companyId = !empty($_POST['company_id']) ? (int) $_POST['company_id'] : null;
         $mediaId = Media::create([
             'uuid'              => $uuid,
             'section_id'        => $primarySectionId,
+            'company_id'        => $companyId,
             'title'             => $title,
             'description'       => $_POST['description'] ?? null,
             'keywords'          => $_POST['keywords'] ?? null,

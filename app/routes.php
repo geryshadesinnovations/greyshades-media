@@ -50,4 +50,7 @@ $router->post('/admin/users/{id}/delete',    [AdminController::class, 'userDelet
 $router->get('/admin/categories',            [AdminController::class, 'categories'],    [RequireAdmin::class]);
 $router->post('/admin/categories',           [AdminController::class, 'categoryStore'], [RequireAdmin::class]);
 $router->post('/admin/categories/{id}/delete',[AdminController::class, 'categoryDelete'],[RequireAdmin::class]);
+$router->get('/admin/companies',              [AdminController::class, 'companies'],     [RequireAdmin::class]);
+$router->post('/admin/companies',             [AdminController::class, 'companyStore'],  [RequireAdmin::class]);
+$router->post('/admin/companies/{id}/delete', [AdminController::class, 'companyDelete'], [RequireAdmin::class]);
 $router->get('/admin/activity',              [AdminController::class, 'activity'],      [RequireAdmin::class]);

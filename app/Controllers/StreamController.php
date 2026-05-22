@@ -205,6 +205,8 @@ final class StreamController
         $size = filesize($abs);
         header('X-Content-Type-Options: nosniff');
         header('Content-Type: ' . $mime);
+        header('Content-Disposition: inline');
+        header('X-Frame-Options: SAMEORIGIN');
         header('Cache-Control: private, no-store');
         header('Accept-Ranges: ' . ($allowRange ? 'bytes' : 'none'));
 

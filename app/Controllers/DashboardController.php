@@ -5,6 +5,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Models\Category;
+use App\Models\Company;
 use App\Models\Media;
 use App\Models\Occasion;
 use App\Models\Section;
@@ -22,6 +23,7 @@ final class DashboardController
             'media_type'   => $_GET['type']     ?? null,
             'q'            => $_GET['q']        ?? null,
             'featured'     => !empty($_GET['featured']),
+            'company_id'   => isset($_GET['company']) ? (int) $_GET['company'] : null,
         ];
 
         $sort    = (string) ($_GET['sort']     ?? 'newest');
@@ -42,6 +44,7 @@ final class DashboardController
             'filters'      => $filters,
             'sort'         => $sort,
             'mediaTypes'   => ['video' => 'Videos', 'image' => 'Images', 'pdf' => 'PDFs', 'ppt' => 'Presentations'],
+            'companies'    => Company::all(),
         ]);
     }
 

@@ -46,7 +46,9 @@ $previewUrl = url('/preview/' . $media['uuid']);
 
         <?php elseif ($type === 'ppt'): ?>
             <div class="ppt-stage">
-                <img src="<?= e($previewUrl) ?>" alt="<?= e($media['title']) ?> preview">
+                <?php if (!empty($media['preview_path'])): ?>
+                <img src="<?= e($previewUrl) ?>" alt="<?= e($media['title']) ?> preview" style="max-width:100%; border-radius:12px;">
+                <?php endif; ?>
                 <p class="muted">Presentations are shown as a secure first-slide preview.</p>
             </div>
 
@@ -83,7 +85,7 @@ $previewUrl = url('/preview/' . $media['uuid']);
         <?php endif; ?>
 
         <div class="info-actions">
-            <?php if ($canDownload): ?>
+            <?php if ($canDownload && ($media['is_downloadable'] || \App\Core\Auth::isSuperAdmin())): ?>
                 <a class="btn-primary" href="<?= url('/download/' . $media['uuid']) ?>">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
                     Download

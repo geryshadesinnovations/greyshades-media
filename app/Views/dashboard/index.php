@@ -7,6 +7,7 @@
  * @var array $filters
  * @var string $sort
  * @var array $mediaTypes
+ * @var array $companies
  */
 $this->extend('layouts/app');
 $rows  = $result['rows'];
@@ -25,6 +26,7 @@ $buildUrl = function (array $changes = []) use ($filters, $sort): string {
         'occasion' => $filters['occasion_id']  ?? null,
         'type'     => $filters['media_type']   ?? null,
         'q'        => $filters['q']            ?? null,
+        'company'  => $filters['company_id']   ?? null,
         'sort'     => $sort !== 'newest' ? $sort : null,
     ], fn ($v) => $v !== null && $v !== '' && $v !== 0);
     foreach ($changes as $k => $v) {
@@ -60,6 +62,10 @@ $buildUrl = function (array $changes = []) use ($filters, $sort): string {
                 $activeChips[] = ['label' => 'Occasion: ' . $occName, 'href' => $buildUrl(['occasion' => null])];
             }
             if (!empty($filters['media_type']))   $activeChips[] = ['label' => 'Type: ' . ucfirst((string) $filters['media_type']), 'href' => $buildUrl(['type' => null])];
+            if (!empty($filters['company_id'])) {
+                $compName = (string) (\App\Core\Database::scalar('SELECT name FROM companies WHERE id = ?', [(int) $filters['company_id']]) ?? 'Company');
+                $activeChips[] = ['label' => 'Company: ' . $compName, 'href' => $buildUrl(['company' => null])];
+            }
         ?>
 
         <div class="filterbar glass">
@@ -67,6 +73,7 @@ $buildUrl = function (array $changes = []) use ($filters, $sort): string {
                 <?php /* preserve current filters as hidden inputs so each select-change submits the FULL filter set */ ?>
                 <?php if (!empty($filters['q'])): ?>       <input type="hidden" name="q"        value="<?= e($filters['q']) ?>"><?php endif; ?>
                 <?php if (!empty($filters['category_id'])): ?><input type="hidden" name="category" value="<?= (int) $filters['category_id'] ?>"><?php endif; ?>
+                <?php if (!empty($filters['company_id'])): ?><input type="hidden" name="company" value="<?= (int) $filters['company_id'] ?>"><?php endif; ?>
 
                 <label class="select">
                     <span>Section</span>
@@ -84,6 +91,16 @@ $buildUrl = function (array $changes = []) use ($filters, $sort): string {
                         <option value="">All types</option>
                         <?php foreach ($mediaTypes as $k => $v): ?>
                         <option value="<?= e($k) ?>" <?= ($filters['media_type'] ?? null) === $k ? 'selected' : '' ?>><?= e($v) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+
+                <label class="select">
+                    <span>Company</span>
+                    <select name="company" onchange="this.form.submit()">
+                        <option value="">All companies</option>
+                        <?php foreach ($companies as $co): ?>
+                        <option value="<?= (int)$co['id'] ?>" <?= ((int)($filters['company_id'] ?? 0)) === (int)$co['id'] ? 'selected' : '' ?>><?= e($co['name']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </label>
@@ -122,7 +139,7 @@ $buildUrl = function (array $changes = []) use ($filters, $sort): string {
         <div class="content-header">
             <h2>
                 <?php if (!empty($filters['q'])): ?>Search results for "<?= e($filters['q']) ?>"
-                <?php elseif (!empty($filters['section_code']) || !empty($filters['category_id']) || !empty($filters['occasion_id']) || !empty($filters['media_type'])): ?>Filtered media
+                <?php elseif (!empty($filters['section_code']) || !empty($filters['category_id']) || !empty($filters['occasion_id']) || !empty($filters['media_type']) || !empty($filters['company_id'])): ?>Filtered media
                 <?php else: ?>All media<?php endif; ?>
             </h2>
             <span class="muted"><?= number_format($total) ?> item<?= $total === 1 ? '' : 's' ?></span>

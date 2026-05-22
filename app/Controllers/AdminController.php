@@ -8,6 +8,7 @@ use App\Core\Auth;
 use App\Core\Csrf;
 use App\Core\Database;
 use App\Models\Category;
+use App\Models\Company;
 use App\Models\Media;
 use App\Models\Section;
 use App\Models\User;
@@ -158,5 +159,36 @@ final class AdminController
              ORDER BY a.id DESC LIMIT 200"
         );
         echo view('admin/activity', ['rows' => $rows]);
+    }
+
+    // -------- COMPANIES --------
+    public function companies(): void
+    {
+        echo view('admin/companies', [
+            'companies' => Company::all(),
+        ]);
+    }
+
+    public function companyStore(): void
+    {
+        Csrf::verifyOrFail();
+        $name = trim((string) ($_POST['name'] ?? ''));
+        if ($name === '') {
+            flash('error', 'Company name is required.');
+            redirect('/admin/companies');
+        }
+        $id = Company::create($name);
+        ActivityLog::record('company.create', 'company', $id, ['name' => $name]);
+        flash('success', 'Company created.');
+        redirect('/admin/companies');
+    }
+
+    public function companyDelete(int $id): void
+    {
+        Csrf::verifyOrFail();
+        Company::delete($id);
+        ActivityLog::record('company.delete', 'company', $id);
+        flash('success', 'Company deleted.');
+        redirect('/admin/companies');
     }
 }

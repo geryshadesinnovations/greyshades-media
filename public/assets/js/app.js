@@ -85,4 +85,64 @@
             regs.forEach(r => r.unregister());
         }).catch(() => {});
     }
+
+    // Video card hover-to-play preview
+    (() => {
+        const isMobile = 'ontouchstart' in window;
+        let activeCard = null;
+        let activeVideo = null;
+
+        function startPreview(card) {
+            const src = card.dataset.previewSrc;
+            if (!src) return;
+            stopPreview();
+            const thumb = card.querySelector('.media-thumb');
+            if (!thumb) return;
+            const video = document.createElement('video');
+            video.src = src;
+            video.muted = true;
+            video.loop = true;
+            video.playsInline = true;
+            video.autoplay = true;
+            video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;z-index:2;';
+            thumb.style.position = 'relative';
+            thumb.appendChild(video);
+            video.play().catch(() => {});
+            activeCard = card;
+            activeVideo = video;
+        }
+
+        function stopPreview() {
+            if (activeVideo) {
+                activeVideo.pause();
+                activeVideo.remove();
+                activeVideo = null;
+            }
+            activeCard = null;
+        }
+
+        if (!isMobile) {
+            document.addEventListener('mouseenter', (e) => {
+                const card = e.target.closest('.media-card[data-preview-src]');
+                if (card) startPreview(card);
+            }, true);
+            document.addEventListener('mouseleave', (e) => {
+                const card = e.target.closest('.media-card[data-preview-src]');
+                if (card && card === activeCard) stopPreview();
+            }, true);
+        } else {
+            // Mobile: play on touchstart if card is in viewport
+            document.addEventListener('touchstart', (e) => {
+                const card = e.target.closest('.media-card[data-preview-src]');
+                if (card && card !== activeCard) {
+                    const rect = card.getBoundingClientRect();
+                    if (rect.top >= 0 && rect.bottom <= window.innerHeight) {
+                        startPreview(card);
+                    }
+                } else if (!card) {
+                    stopPreview();
+                }
+            }, {passive: true});
+        }
+    })();
 })();

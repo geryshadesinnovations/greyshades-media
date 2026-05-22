@@ -8,6 +8,7 @@ use App\Core\Auth;
 use App\Core\Csrf;
 use App\Core\Database;
 use App\Core\StreamToken;
+use App\Models\Company;
 use App\Models\Media;
 use App\Models\Section;
 
@@ -69,6 +70,7 @@ final class MediaController
             'categories' => Media::categoriesFor($id),
             'sections'   => $sections,
             'trees'      => $trees,
+            'companies'  => Company::all(),
         ]);
     }
 
@@ -87,6 +89,7 @@ final class MediaController
             'is_downloadable' => !empty($_POST['is_downloadable']),
             'is_featured'     => !empty($_POST['is_featured']),
             'is_pinned'       => !empty($_POST['is_pinned']),
+            'company_id'      => !empty($_POST['company_id']) ? (int) $_POST['company_id'] : null,
         ]);
 
         // Re-attach categories with full ancestor expansion (same logic as upload)

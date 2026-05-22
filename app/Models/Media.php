@@ -33,13 +33,15 @@ final class Media
     {
         Database::execute(
             "INSERT INTO media
-             (uuid, section_id, title, description, keywords, media_type, mime_type,
+             (uuid, section_id, company_id, title, description, keywords, media_type, mime_type,
               file_path, file_size, file_hash, thumbnail_path, preview_path,
               hls_master, duration_sec, width, height,
               is_downloadable, uploaded_by, processing_status)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             [
-                $data['uuid'], (int) $data['section_id'], $data['title'],
+                $data['uuid'], (int) $data['section_id'],
+                $data['company_id'] ?? null,
+                $data['title'],
                 $data['description'] ?? null, $data['keywords'] ?? null,
                 $data['media_type'], $data['mime_type'],
                 $data['file_path'], (int) ($data['file_size'] ?? 0),
@@ -104,7 +106,7 @@ final class Media
 
     public static function update(int $id, array $data): void
     {
-        $allowed = ['title','description','keywords','is_downloadable','is_featured','is_pinned','download_expiry'];
+        $allowed = ['title','description','keywords','is_downloadable','is_featured','is_pinned','download_expiry','company_id'];
         $sets = []; $params = [];
         foreach ($allowed as $k) {
             if (array_key_exists($k, $data)) {
@@ -197,6 +199,10 @@ final class Media
         if (!empty($filters['media_type'])) {
             $where[] = "m.media_type = ?";
             $params[] = $filters['media_type'];
+        }
+        if (!empty($filters['company_id'])) {
+            $where[] = "m.company_id = ?";
+            $params[] = (int) $filters['company_id'];
         }
         if (!empty($filters['uploader_id'])) {
             $where[] = "m.uploaded_by = ?";
@@ -319,7 +325,7 @@ final class Media
 
         $out = [];
 
-        // -- Media titles (filtered by section visibility)
+        // -- Media titles (filtered by section visibility) with count of matching results
         if ($allowedSections) {
             $marks = implode(',', array_fill(0, count($allowedSections), '?'));
             $params = array_merge($allowedSections, [$start, $like, $like]);
@@ -332,21 +338,32 @@ final class Media
                  LIMIT $perBucket",
                 array_merge($params, [$start])
             );
+            // Count total matching results
+            $countParams = array_merge($allowedSections, [$start, $like, $like]);
+            $totalCount = (int) Database::scalar(
+                "SELECT COUNT(*)
+                 FROM media m JOIN sections s ON s.id = m.section_id
+                 WHERE s.code IN ($marks)
+                   AND (m.title LIKE ? OR m.description LIKE ? OR m.keywords LIKE ?)",
+                $countParams
+            );
             foreach ($rows as $r) {
                 $out[] = [
                     'type'  => 'media',
                     'label' => $r['title'],
                     'meta'  => strtoupper((string) $r['media_type']),
+                    'count' => $totalCount,
                     'href'  => url('/media/' . $r['uuid']),
                 ];
             }
         }
 
-        // -- Categories (only those in sections the user can see)
+        // -- Categories (only those in sections the user can see) with media count
         if ($allowedSections) {
             $marks = implode(',', array_fill(0, count($allowedSections), '?'));
             $rows = Database::all(
-                "SELECT c.id, c.name, s.code AS section_code
+                "SELECT c.id, c.name, s.code AS section_code,
+                        (SELECT COUNT(*) FROM media_categories mc WHERE mc.category_id = c.id) AS media_count
                  FROM categories c JOIN sections s ON s.id = c.section_id
                  WHERE s.code IN ($marks) AND c.name LIKE ?
                  ORDER BY (c.name LIKE ?) DESC, c.name
@@ -358,25 +375,29 @@ final class Media
                     'type'  => 'category',
                     'label' => $r['name'],
                     'meta'  => 'CATEGORY',
+                    'count' => (int) $r['media_count'],
                     'href'  => url('/dashboard?category=' . (int) $r['id']),
                 ];
             }
         }
 
-        // -- Occasions (still useful as a keyword alias for Hybrid days)
+        // -- Companies with media count
         $rows = Database::all(
-            "SELECT id, name FROM occasions
-             WHERE name LIKE ?
-             ORDER BY (name LIKE ?) DESC, name
+            "SELECT co.id, co.name,
+                    (SELECT COUNT(*) FROM media m WHERE m.company_id = co.id) AS media_count
+             FROM companies co
+             WHERE co.is_active = 1 AND co.name LIKE ?
+             ORDER BY (co.name LIKE ?) DESC, co.name
              LIMIT $perBucket",
             [$like, $start]
         );
         foreach ($rows as $r) {
             $out[] = [
-                'type'  => 'occasion',
+                'type'  => 'company',
                 'label' => $r['name'],
-                'meta'  => 'OCCASION',
-                'href'  => url('/dashboard?occasion=' . (int) $r['id']),
+                'meta'  => 'COMPANY',
+                'count' => (int) $r['media_count'],
+                'href'  => url('/dashboard?company=' . (int) $r['id']),
             ];
         }
 
