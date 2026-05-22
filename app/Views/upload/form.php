@@ -123,6 +123,19 @@ foreach ($sections as $s) {
                     <div id="progress-wrap" class="progress" hidden><div id="progress-bar"></div></div>
                     <div id="upload-result" class="upload-result" hidden></div>
                 </div>
+
+                <!-- Thumbnail dropzone — same look as the main file dropzone.
+                     Hidden by default; revealed by upload.js only when the
+                     selected main file is video / ppt / pptx / pdf. -->
+                <div id="thumbnail-area" class="drop-area drop-area-thumbnail" hidden>
+                    <input type="file" id="thumbnail-input" name="thumbnail" accept=".jpg,.jpeg,.png,.webp" hidden>
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 16l5-5 4 4 4-3 5 4"/><circle cx="9" cy="9" r="1.5"/></svg>
+                    <h3>Drag &amp; drop a thumbnail</h3>
+                    <p>or <button type="button" class="link-btn" id="thumb-browse-btn">browse for a thumbnail image</button></p>
+                    <p class="muted small">Required for Video / PPT / PDF · JPG · PNG · WEBP</p>
+                    <div id="thumb-info" class="file-info" hidden></div>
+                    <img id="thumb-preview" alt="Thumbnail preview" hidden>
+                </div>
             </form>
 
             <!-- Media preview before upload -->
@@ -160,10 +173,6 @@ foreach ($sections as $s) {
                         <option value="<?= (int)$co['id'] ?>"><?= e($co['name']) ?></option>
                         <?php endforeach; ?>
                     </select>
-                    </label>
-
-                    <label><span>Thumbnail (required for Video, PPT, PDF)</span>
-                    <input form="upload-form" type="file" name="thumbnail" accept=".jpg,.jpeg,.png,.webp">
                     </label>
                 </div>
             </div>

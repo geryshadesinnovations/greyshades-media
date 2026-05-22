@@ -151,6 +151,56 @@ final class MediaProcessor
         return self::pdfPreview($pdfPath, $absPngOut);
     }
 
+    /**
+     * Convert a PPT/PPTX to a full PDF (all slides, navigable in the browser
+     * PDF viewer) and ALSO render a first-slide PNG thumbnail.
+     *
+     * Returns ['pdf' => absPdfPath|null, 'thumb' => absPngPath|null]. Either
+     * value may be null if the corresponding tool is unavailable - the
+     * upload still succeeds, just without that asset.
+     */
+    public static function pptToPdfAndThumbnail(string $absPpt, string $absPdfOut, string $absThumbOut, string $tmpDir): array
+    {
+        $lo = (string) config('media.libreoffice');
+        if (!self::binExists($lo)) return ['pdf' => null, 'thumb' => null];
+        if (!is_dir($tmpDir) && !mkdir($tmpDir, 0775, true) && !is_dir($tmpDir)) {
+            return ['pdf' => null, 'thumb' => null];
+        }
+
+        // 1. Convert PPT -> PDF in temp dir
+        $cmd = sprintf(
+            '%s --headless --convert-to pdf --outdir %s %s 2>&1',
+            escapeshellcmd($lo),
+            escapeshellarg($tmpDir),
+            escapeshellarg($absPpt)
+        );
+        @exec($cmd, $out, $code);
+        if ($code !== 0) return ['pdf' => null, 'thumb' => null];
+
+        $pdfTmp = $tmpDir . '/' . pathinfo($absPpt, PATHINFO_FILENAME) . '.pdf';
+        if (!is_file($pdfTmp)) return ['pdf' => null, 'thumb' => null];
+
+        // 2. Move/copy the full PDF to its final location (used by /preview/)
+        $pdfFinal = null;
+        $outDir = dirname($absPdfOut);
+        if (!is_dir($outDir)) @mkdir($outDir, 0775, true);
+        if (@rename($pdfTmp, $absPdfOut) || @copy($pdfTmp, $absPdfOut)) {
+            $pdfFinal = $absPdfOut;
+            // If we copied, clean the tmp file
+            if (is_file($pdfTmp)) @unlink($pdfTmp);
+        }
+
+        // 3. Render first-page thumbnail PNG (for grid display)
+        $thumbFinal = null;
+        if ($pdfFinal) {
+            $thumbDir = dirname($absThumbOut);
+            if (!is_dir($thumbDir)) @mkdir($thumbDir, 0775, true);
+            $thumbFinal = self::pdfPreview($pdfFinal, $absThumbOut);
+        }
+
+        return ['pdf' => $pdfFinal, 'thumb' => $thumbFinal];
+    }
+
     /** Build an optimised JPEG/WebP thumbnail for an image (max 600px). */
     public static function imageThumbnail(string $absImage, string $absThumbOut): ?string
     {

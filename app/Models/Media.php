@@ -305,14 +305,17 @@ final class Media
     /**
      * Lightweight, search-as-you-type suggestions for the topbar search box.
      *
-     * Returns up to $limit hits across three buckets:
-     *   - media titles      (clickable -> opens that file)
-     *   - category names    (clickable -> filter dashboard by that category)
-     *   - occasion names    (clickable -> filter dashboard by that occasion)
+     * Returns up to $limit hits across three buckets, in priority order:
+     *   1. Individual media titles (clickable -> opens that file).
+     *      Each row carries count=1 so users see a real number.
+     *   2. Categories that match the query, with media_count of how many
+     *      files live under that category subtree.
+     *   3. Companies that match the query, with media_count.
      *
      * Permission filtering is honoured for media titles via $allowedSections.
-     * Categories/occasions are global metadata and are returned for
-     * every signed-in user.
+     * Categories/companies are global metadata and visible to every signed-in
+     * user; clicking a category will then re-filter through allowed sections
+     * on the dashboard, so no leak occurs.
      */
     public static function suggest(string $q, array $allowedSections, int $limit = 8): array
     {
@@ -325,10 +328,13 @@ final class Media
 
         $out = [];
 
-        // -- Media titles (filtered by section visibility) with count of matching results
+        // -- 1. Media titles (filtered by section visibility). Each match
+        // -- represents one file, so count is 1 (the user sees a concrete
+        // -- match they can open). The dashboard search will show the full
+        // -- result set when they hit Enter without picking a suggestion.
         if ($allowedSections) {
             $marks = implode(',', array_fill(0, count($allowedSections), '?'));
-            $params = array_merge($allowedSections, [$start, $like, $like]);
+            $params = array_merge($allowedSections, [$start, $like, $like, $start]);
             $rows = Database::all(
                 "SELECT m.uuid, m.title, m.media_type
                  FROM media m JOIN sections s ON s.id = m.section_id
@@ -336,34 +342,27 @@ final class Media
                    AND (m.title LIKE ? OR m.description LIKE ? OR m.keywords LIKE ?)
                  ORDER BY (m.title LIKE ?) DESC, m.is_featured DESC, m.created_at DESC
                  LIMIT $perBucket",
-                array_merge($params, [$start])
-            );
-            // Count total matching results
-            $countParams = array_merge($allowedSections, [$start, $like, $like]);
-            $totalCount = (int) Database::scalar(
-                "SELECT COUNT(*)
-                 FROM media m JOIN sections s ON s.id = m.section_id
-                 WHERE s.code IN ($marks)
-                   AND (m.title LIKE ? OR m.description LIKE ? OR m.keywords LIKE ?)",
-                $countParams
+                $params
             );
             foreach ($rows as $r) {
                 $out[] = [
                     'type'  => 'media',
                     'label' => $r['title'],
                     'meta'  => strtoupper((string) $r['media_type']),
-                    'count' => $totalCount,
+                    'count' => 1,
                     'href'  => url('/media/' . $r['uuid']),
                 ];
             }
         }
 
-        // -- Categories (only those in sections the user can see) with media count
+        // -- 2. Categories — show media count under each match (zero-aware).
         if ($allowedSections) {
             $marks = implode(',', array_fill(0, count($allowedSections), '?'));
             $rows = Database::all(
-                "SELECT c.id, c.name, s.code AS section_code,
-                        (SELECT COUNT(*) FROM media_categories mc WHERE mc.category_id = c.id) AS media_count
+                "SELECT c.id, c.name,
+                        (SELECT COUNT(DISTINCT mc.media_id)
+                         FROM media_categories mc
+                         WHERE mc.category_id = c.id) AS media_count
                  FROM categories c JOIN sections s ON s.id = c.section_id
                  WHERE s.code IN ($marks) AND c.name LIKE ?
                  ORDER BY (c.name LIKE ?) DESC, c.name
@@ -381,7 +380,8 @@ final class Media
             }
         }
 
-        // -- Companies with media count
+        // -- 3. Companies — same idea, tells the user how many files exist
+        // -- before they click in.
         $rows = Database::all(
             "SELECT co.id, co.name,
                     (SELECT COUNT(*) FROM media m WHERE m.company_id = co.id) AS media_count

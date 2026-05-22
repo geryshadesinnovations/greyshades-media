@@ -259,7 +259,17 @@ html[data-theme="light"] .topbar { background: rgba(255,255,255,.65); }
     margin-bottom: 1rem; padding: .55rem .9rem; border-radius: 10px;
     background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer;
   }
-  .topbar-search { display: none; }
+  /* Search must stay usable on mobile/tablet — wrap to its own row instead
+   * of disappearing. Allows tablet & smaller laptop users to actually find
+   * media without breaking the layout. */
+  .topbar { flex-wrap: wrap; row-gap: .5rem; }
+  .topbar-search {
+    display: flex !important;
+    order: 99;
+    flex-basis: 100%;
+    max-width: 100%;
+    margin-top: .25rem;
+  }
 }
 
 /* ---------- Sidebar ---------- */
@@ -1481,3 +1491,74 @@ html[data-theme="light"] .cat-card-section {
  * `pointer-events: none` could be inherited. Reset just for safety. */
 .user-chip,
 .user-chip * { pointer-events: auto; }
+
+
+
+/* ===========================================================================
+ * Latest patch:
+ *   - Thumbnail dropzone (mirrors main file dropzone, only shown for
+ *     Video / PPT / PDF uploads)
+ *   - Search suggestion count chip beside each match (zero-aware styling)
+ *   - Search bar visibility on smaller screens (already wired in
+ *     `@media (max-width: 960px)`)
+ * ========================================================================= */
+
+/* Thumbnail dropzone — sits directly below the main file dropzone and shares
+ * its visual language so the two feel like one drop area. We keep the same
+ * dashed border + dragover treatment but make the secondary box a bit smaller
+ * and more subdued so it never visually competes with the main upload area. */
+.drop-area-thumbnail {
+    margin-top: 1rem;
+    min-height: 200px;
+    padding: 2rem 1.25rem;
+    background: rgba(167, 139, 250, 0.04);
+}
+.drop-area-thumbnail[hidden] { display: none !important; }
+.drop-area-thumbnail h3 { font-size: 1rem; }
+.drop-area-thumbnail svg { color: var(--accent); }
+.drop-area-thumbnail #thumb-info { margin-top: .75rem; }
+.drop-area-thumbnail #thumb-preview {
+    margin-top: .85rem;
+    max-width: 100%;
+    max-height: 220px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    display: block;
+    object-fit: cover;
+}
+
+/* Count chip beside each search suggestion — shows match volume so users
+ * never click into an empty category. count=0 is rendered in muted/danger so
+ * "Finance (0)" is visually distinct from "Doctor Day (12)". */
+.search-suggest-count {
+    flex-shrink: 0;
+    min-width: 28px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 11.5px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+.search-suggest-count[data-empty="1"] {
+    background: rgba(248, 113, 113, .12);
+    color: var(--text-muted);
+}
+
+/* Search bar polish on tablets and below — make sure tap target is large
+ * enough and the dropdown spans the full row. */
+@media (max-width: 960px) {
+    .topbar-search { padding: .55rem .85rem; }
+    .topbar-search input { font-size: 15px; }
+    .search-suggest { max-height: 70vh; }
+}
+
+/* Very small phones — let the brand wordmark shrink so the search row
+ * doesn't get pushed off-screen. */
+@media (max-width: 480px) {
+    .topbar { padding: .5rem .65rem; gap: .4rem; }
+    .topbar-search { margin-top: .35rem; }
+}

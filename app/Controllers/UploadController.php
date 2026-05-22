@@ -37,17 +37,36 @@ final class UploadController
 
     public function store(): void
     {
+        // Detect post_max_size overrun: if exceeded, $_POST and $_FILES are
+        // empty even though Content-Length is large. Return a clear message
+        // instead of failing CSRF or "no file uploaded".
+        $contentLen = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
+        $postMax    = $this->iniBytes(ini_get('post_max_size'));
+        if ($contentLen > 0 && $postMax > 0 && $contentLen > $postMax && empty($_POST) && empty($_FILES)) {
+            $this->jsonError(
+                'Upload exceeds the server limit (' . ini_get('post_max_size') . '). '
+                . 'Please contact the admin to raise post_max_size / upload_max_filesize.',
+                413
+            );
+        }
+
         Csrf::verifyOrFail();
         if (!Auth::canUpload()) { http_response_code(403); echo 'Forbidden'; return; }
 
-        if (empty($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            $this->jsonError('No file uploaded or upload error.');
+        if (empty($_FILES['file']) || !isset($_FILES['file']['error'])) {
+            $this->jsonError('No file received. The file may be larger than the server allows.');
+        }
+        $err = (int) $_FILES['file']['error'];
+        if ($err !== UPLOAD_ERR_OK) {
+            $this->jsonError($this->uploadErrorMessage($err));
         }
         $file = $_FILES['file'];
 
         // Validate mime
         $mime = $this->detectMime($file['tmp_name'], (string) $file['name']);
         $allowed = (array) config('media.allowed_mimes', []);
+        // Accept "image/jpg" alias from older browsers, normalise to image/jpeg
+        if ($mime === 'image/jpg') $mime = 'image/jpeg';
         if (!in_array($mime, $allowed, true)) {
             $this->jsonError('File type not allowed: ' . $mime);
         }
@@ -87,6 +106,22 @@ final class UploadController
         $title = trim((string) ($_POST['title'] ?? pathinfo($file['name'], PATHINFO_FILENAME)));
         if ($title === '') $this->jsonError('Title is required.');
 
+        // For Video, PPT, PPTX and PDF we require a custom thumbnail upload
+        // (these formats can't reliably auto-generate a thumbnail without
+        // ffmpeg/libreoffice/imagemagick installed). Images embed their own
+        // visual so no thumbnail is needed.
+        $type = MediaProcessor::classify($mime);
+        if (in_array($type, ['video', 'ppt', 'pdf'], true)) {
+            $tn = $_FILES['thumbnail'] ?? null;
+            $tnErr = $tn['error'] ?? UPLOAD_ERR_NO_FILE;
+            if (!$tn || $tnErr === UPLOAD_ERR_NO_FILE) {
+                $this->jsonError('Thumbnail image is required for ' . strtoupper($type) . ' files.');
+            }
+            if ($tnErr !== UPLOAD_ERR_OK) {
+                $this->jsonError('Thumbnail upload failed: ' . $this->uploadErrorMessage((int) $tnErr));
+            }
+        }
+
         // Compute file hash for dedup
         $hash = hash_file('sha256', $file['tmp_name']);
         if ($existing = Media::findByHash($hash)) {
@@ -102,7 +137,6 @@ final class UploadController
         }
 
         // Persist physical file
-        $type   = MediaProcessor::classify($mime);
         $uuid   = $this->uuidv4();
         $ext    = $this->extFor($mime, (string) $file['name']);
         $relDir = '/uploads/originals/' . date('Y/m');
@@ -220,11 +254,23 @@ final class UploadController
             MediaProcessor::pdfPreview($absPath, storage_path($previewRel));
             $thumbRel = $previewRel; // reuse for grid
         } elseif ($type === 'ppt') {
+            // Convert PPT/PPTX to a full PDF so users can navigate ALL slides
+            // in the browser's PDF viewer (not just see the first slide).
+            // Also render a first-slide PNG for the dashboard grid thumbnail.
             $previewDir = '/uploads/ppt-previews/' . date('Y/m');
-            if (!is_dir(storage_path($previewDir))) @mkdir(storage_path($previewDir), 0775, true);
-            $previewRel = $previewDir . '/' . $uuid . '.png';
-            MediaProcessor::pptPreview($absPath, storage_path($previewRel), storage_path('/cache'));
-            $thumbRel = $previewRel;
+            $absPreviewDir = storage_path($previewDir);
+            if (!is_dir($absPreviewDir)) @mkdir($absPreviewDir, 0775, true);
+            $previewRel = $previewDir . '/' . $uuid . '.pdf';
+            $thumbRel   = $thumbDir . '/' . $uuid . '.png';
+            $r = MediaProcessor::pptToPdfAndThumbnail(
+                $absPath,
+                storage_path($previewRel),
+                storage_path($thumbRel),
+                storage_path('/cache')
+            );
+            // If conversion failed (e.g. LibreOffice missing), drop preview
+            if (!$r['pdf'])   $previewRel = null;
+            if (!$r['thumb']) $thumbRel   = null;
         }
 
         return [$thumbRel, $previewRel, $hlsMasterRel, $duration, $w, $h];
@@ -267,6 +313,36 @@ final class UploadController
         $b[6] = chr((ord($b[6]) & 0x0f) | 0x40);
         $b[8] = chr((ord($b[8]) & 0x3f) | 0x80);
         return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($b), 4));
+    }
+
+    /** Convert a PHP ini size string (e.g. "8M", "512K", "2G") to bytes. */
+    private function iniBytes(string $val): int
+    {
+        $val = trim($val);
+        if ($val === '') return 0;
+        $unit = strtolower(substr($val, -1));
+        $num  = (int) $val;
+        return match ($unit) {
+            'g' => $num * 1024 * 1024 * 1024,
+            'm' => $num * 1024 * 1024,
+            'k' => $num * 1024,
+            default => $num,
+        };
+    }
+
+    /** Map PHP UPLOAD_ERR_* codes to human-readable messages. */
+    private function uploadErrorMessage(int $code): string
+    {
+        return match ($code) {
+            UPLOAD_ERR_INI_SIZE   => 'File is larger than the server allows (upload_max_filesize). Please choose a smaller file.',
+            UPLOAD_ERR_FORM_SIZE  => 'File is larger than the form allows.',
+            UPLOAD_ERR_PARTIAL    => 'Upload was interrupted. Please try again.',
+            UPLOAD_ERR_NO_FILE    => 'No file was selected.',
+            UPLOAD_ERR_NO_TMP_DIR => 'Server is missing a temporary upload folder. Contact admin.',
+            UPLOAD_ERR_CANT_WRITE => 'Server failed to write the upload to disk.',
+            UPLOAD_ERR_EXTENSION  => 'A PHP extension blocked the upload.',
+            default               => 'Unknown upload error (code ' . $code . ').',
+        };
     }
 
     private function jsonOk(array $data): never

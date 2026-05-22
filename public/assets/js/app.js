@@ -88,61 +88,87 @@
 
     // Video card hover-to-play preview
     (() => {
-        const isMobile = 'ontouchstart' in window;
-        let activeCard = null;
-        let activeVideo = null;
+        const isMobile = matchMedia('(hover: none), (max-width: 720px)').matches
+            || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
 
-        function startPreview(card) {
+        let active = null; // { card, video }
+        let hoverDelay = null;
+
+        const stopPreview = () => {
+            if (hoverDelay) { clearTimeout(hoverDelay); hoverDelay = null; }
+            if (active) {
+                try { active.video.pause(); } catch (_) {}
+                active.video.remove();
+                active = null;
+            }
+        };
+
+        const startPreview = (card) => {
+            if (active && active.card === card) return;
+            stopPreview();
             const src = card.dataset.previewSrc;
             if (!src) return;
-            stopPreview();
             const thumb = card.querySelector('.media-thumb');
             if (!thumb) return;
+
             const video = document.createElement('video');
             video.src = src;
             video.muted = true;
-            video.loop = true;
+            video.loop  = true;
             video.playsInline = true;
             video.autoplay = true;
-            video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;z-index:2;';
+            video.preload  = 'auto';
+            video.setAttribute('controlslist', 'nodownload noremoteplayback');
+            video.style.cssText =
+                'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;' +
+                'border-radius:inherit;z-index:2;pointer-events:none;';
             thumb.style.position = 'relative';
             thumb.appendChild(video);
+            // Some browsers reject autoplay until the metadata loads
+            video.addEventListener('loadedmetadata', () => {
+                video.play().catch(() => {});
+            }, { once: true });
             video.play().catch(() => {});
-            activeCard = card;
-            activeVideo = video;
-        }
 
-        function stopPreview() {
-            if (activeVideo) {
-                activeVideo.pause();
-                activeVideo.remove();
-                activeVideo = null;
-            }
-            activeCard = null;
-        }
+            active = { card, video };
+        };
 
+        // ---- Desktop: hover-to-play, attached per-card so events are reliable
         if (!isMobile) {
-            document.addEventListener('mouseenter', (e) => {
-                const card = e.target.closest('.media-card[data-preview-src]');
-                if (card) startPreview(card);
-            }, true);
-            document.addEventListener('mouseleave', (e) => {
-                const card = e.target.closest('.media-card[data-preview-src]');
-                if (card && card === activeCard) stopPreview();
-            }, true);
+            // Wire up listeners for all current and future cards
+            const wireCard = (card) => {
+                if (card.dataset.previewWired) return;
+                card.dataset.previewWired = '1';
+                card.addEventListener('mouseenter', () => {
+                    // Tiny delay so a quick scan of the grid doesn't fire 20 videos
+                    hoverDelay = setTimeout(() => startPreview(card), 120);
+                });
+                card.addEventListener('mouseleave', () => {
+                    if (hoverDelay) { clearTimeout(hoverDelay); hoverDelay = null; }
+                    if (active && active.card === card) stopPreview();
+                });
+            };
+            document.querySelectorAll('.media-card[data-preview-src]').forEach(wireCard);
+            // Watch for newly-injected cards (e.g. infinite scroll, search)
+            new MutationObserver(records => {
+                for (const r of records) {
+                    r.addedNodes.forEach(n => {
+                        if (n.nodeType !== 1) return;
+                        if (n.matches?.('.media-card[data-preview-src]')) wireCard(n);
+                        n.querySelectorAll?.('.media-card[data-preview-src]').forEach(wireCard);
+                    });
+                }
+            }).observe(document.body, { childList: true, subtree: true });
         } else {
-            // Mobile: play on touchstart if card is in viewport
+            // ---- Mobile: tap a video card to start preview, tap elsewhere to stop
             document.addEventListener('touchstart', (e) => {
                 const card = e.target.closest('.media-card[data-preview-src]');
-                if (card && card !== activeCard) {
-                    const rect = card.getBoundingClientRect();
-                    if (rect.top >= 0 && rect.bottom <= window.innerHeight) {
-                        startPreview(card);
-                    }
-                } else if (!card) {
+                if (card) {
+                    if (!active || active.card !== card) startPreview(card);
+                } else {
                     stopPreview();
                 }
-            }, {passive: true});
+            }, { passive: true });
         }
     })();
 })();

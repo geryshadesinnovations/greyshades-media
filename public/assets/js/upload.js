@@ -38,6 +38,85 @@
     const previewPdf   = document.getElementById('preview-pdf');
     const previewPpt   = document.getElementById('preview-ppt');
 
+    /* ---------- Thumbnail dropzone wiring ---------- */
+    const thumbArea     = document.getElementById('thumbnail-area');
+    const thumbInput    = document.getElementById('thumbnail-input');
+    const thumbBrowse   = document.getElementById('thumb-browse-btn');
+    const thumbInfo     = document.getElementById('thumb-info');
+    const thumbPreview  = document.getElementById('thumb-preview');
+
+    /** Types that REQUIRE a custom thumbnail upload (video / ppt / pdf). */
+    const TYPES_NEEDING_THUMB = new Set(['video', 'ppt', 'pdf']);
+
+    /** Determine high-level type from a File object. */
+    const fileType = (file) => {
+        const t = file.type || '';
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (t.startsWith('video/') || ext === 'mp4') return 'video';
+        if (t.startsWith('image/') || ['png','jpg','jpeg','webp','gif'].includes(ext)) return 'image';
+        if (t === 'application/pdf' || ext === 'pdf') return 'pdf';
+        if (['ppt','pptx'].includes(ext) || t.includes('powerpoint') || t.includes('presentation')) return 'ppt';
+        return 'other';
+    };
+
+    /** Show/hide the thumbnail dropzone based on the main file type. */
+    const updateThumbnailVisibility = (kind) => {
+        if (!thumbArea) return;
+        if (TYPES_NEEDING_THUMB.has(kind)) {
+            thumbArea.hidden = false;
+        } else {
+            thumbArea.hidden = true;
+            // Clear any previously selected thumbnail when switching to image
+            if (thumbInput) thumbInput.value = '';
+            if (thumbInfo)  { thumbInfo.hidden = true; thumbInfo.innerHTML = ''; }
+            if (thumbPreview) { thumbPreview.hidden = true; thumbPreview.removeAttribute('src'); }
+        }
+    };
+
+    const showThumbInfo = (file) => {
+        if (!thumbInfo) return;
+        thumbInfo.hidden = false;
+        thumbInfo.innerHTML =
+            '<div><strong>' + escapeHtml(file.name) + '</strong></div>' +
+            '<div class="muted small">' + escapeHtml(file.type || 'image') + ' · ' + bytes(file.size) + '</div>';
+    };
+
+    const showThumbPreview = (file) => {
+        if (!thumbPreview) return;
+        thumbPreview.src = URL.createObjectURL(file);
+        thumbPreview.hidden = false;
+    };
+
+    const selectThumbnail = (file) => {
+        if (!thumbInput) return;
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        thumbInput.files = dt.files;
+        showThumbInfo(file);
+        showThumbPreview(file);
+    };
+
+    if (thumbArea) {
+        thumbArea.addEventListener('click', (e) => {
+            if (e.target.closest('button') || e.target.closest('a')) return;
+            thumbInput?.click();
+        });
+        if (thumbBrowse) thumbBrowse.addEventListener('click', () => thumbInput?.click());
+
+        ['dragenter','dragover'].forEach(ev =>
+            thumbArea.addEventListener(ev, (e) => { e.preventDefault(); thumbArea.classList.add('dragover'); }));
+        ['dragleave','drop'].forEach(ev =>
+            thumbArea.addEventListener(ev, (e) => { e.preventDefault(); thumbArea.classList.remove('dragover'); }));
+
+        thumbArea.addEventListener('drop', (e) => {
+            const f = e.dataTransfer.files?.[0];
+            if (f && /^image\//.test(f.type || '')) selectThumbnail(f);
+        });
+        thumbInput?.addEventListener('change', () => {
+            if (thumbInput.files?.length) selectThumbnail(thumbInput.files[0]);
+        });
+    }
+
     const summaryWrap  = document.getElementById('cat-summary');
     const summaryChips = summaryWrap?.querySelector('.cat-summary-chips');
 
@@ -93,6 +172,8 @@
         input.files = dt.files;
         showInfo(file);
         showPreview(file);
+        // Reveal/hide the thumbnail dropzone based on file type
+        updateThumbnailVisibility(fileType(file));
     };
 
     drop.addEventListener('click', (e) => {
@@ -128,6 +209,23 @@
             const checked = [...catCheckboxes()].filter(cb => cb.checked).length;
             if (checked === 0) {
                 showError('Please pick at least one category.');
+                return;
+            }
+            // Title is required on the form (HTML5 attribute) but double-check
+            if (titleInput && !titleInput.value.trim()) {
+                titleInput.focus();
+                showError('Please enter a title.');
+                return;
+            }
+            // Thumbnail is required for video / ppt / pdf
+            const kind = fileType(input.files[0]);
+            if (TYPES_NEEDING_THUMB.has(kind) && (!thumbInput || !thumbInput.files?.length)) {
+                if (thumbArea) {
+                    thumbArea.classList.add('dragover');
+                    setTimeout(() => thumbArea.classList.remove('dragover'), 600);
+                    thumbArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                showError('Please upload a thumbnail image for this ' + kind.toUpperCase() + ' file.');
                 return;
             }
             submit();
@@ -167,6 +265,11 @@
                         input.value = ''; info.hidden = true;
                         if (previewWrap) previewWrap.classList.remove('visible');
                         [previewVideo, previewImage, previewPdf, previewPpt].forEach(el => { if (el) el.style.display = 'none'; });
+                        // Reset thumbnail dropzone
+                        if (thumbInput) thumbInput.value = '';
+                        if (thumbInfo)  { thumbInfo.hidden = true; thumbInfo.innerHTML = ''; }
+                        if (thumbPreview) { thumbPreview.hidden = true; thumbPreview.removeAttribute('src'); }
+                        if (thumbArea) thumbArea.hidden = true;
                     }
                 } else {
                     result.className = 'upload-result error';

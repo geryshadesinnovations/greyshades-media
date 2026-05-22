@@ -126,8 +126,17 @@ final class StreamController
         if (!$rel) { http_response_code(404); return; }
         $abs = storage_path((string) $rel);
         if (!is_file($abs)) { http_response_code(404); return; }
-        $mime = mime_content_type($abs) ?: 'image/png';
-        $this->serveFile($abs, $mime, allowRange: false);
+        // Pick the right MIME from the file extension - PPT previews are now
+        // PDFs (full slide deck), older uploads may still be PNGs.
+        $ext = strtolower((string) pathinfo($abs, PATHINFO_EXTENSION));
+        $mime = match ($ext) {
+            'pdf'  => 'application/pdf',
+            'png'  => 'image/png',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'webp' => 'image/webp',
+            default => mime_content_type($abs) ?: 'application/octet-stream',
+        };
+        $this->serveFile($abs, $mime, allowRange: ($mime === 'application/pdf'));
     }
 
     public function download(string $uuid): void

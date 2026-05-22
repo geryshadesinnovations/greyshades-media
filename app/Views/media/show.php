@@ -41,15 +41,28 @@ $previewUrl = url('/preview/' . $media['uuid']);
 
         <?php elseif ($type === 'pdf'): ?>
             <div class="pdf-stage">
-                <iframe src="<?= e($streamUrl) ?>#toolbar=0&navpanes=0&scrollbar=0" sandbox="allow-scripts allow-same-origin"></iframe>
+                <object data="<?= e($streamUrl) ?>#toolbar=1&navpanes=0" type="application/pdf">
+                    <embed src="<?= e($streamUrl) ?>#toolbar=1&navpanes=0" type="application/pdf">
+                    <p style="padding:2rem;text-align:center;">
+                        Your browser cannot display this PDF inline.
+                        <a href="<?= e($streamUrl) ?>" target="_blank" rel="noopener">Open in a new tab</a>.
+                    </p>
+                </object>
             </div>
 
         <?php elseif ($type === 'ppt'): ?>
-            <div class="ppt-stage">
+            <div class="pdf-stage">
                 <?php if (!empty($media['preview_path'])): ?>
-                <img src="<?= e($previewUrl) ?>" alt="<?= e($media['title']) ?> preview" style="max-width:100%; border-radius:12px;">
+                <object data="<?= e($previewUrl) ?>#toolbar=1&navpanes=0" type="application/pdf">
+                    <embed src="<?= e($previewUrl) ?>#toolbar=1&navpanes=0" type="application/pdf">
+                    <p style="padding:2rem;text-align:center;">
+                        Your browser cannot display this presentation inline.
+                        <a href="<?= e($previewUrl) ?>" target="_blank" rel="noopener">Open in a new tab</a>.
+                    </p>
+                </object>
+                <?php else: ?>
+                <p class="muted" style="padding:2rem;text-align:center;">Preview not available for this presentation.</p>
                 <?php endif; ?>
-                <p class="muted">Presentations are shown as a secure first-slide preview.</p>
             </div>
 
         <?php else: ?>
@@ -85,7 +98,11 @@ $previewUrl = url('/preview/' . $media['uuid']);
         <?php endif; ?>
 
         <div class="info-actions">
-            <?php if ($canDownload && ($media['is_downloadable'] || \App\Core\Auth::isSuperAdmin())): ?>
+            <?php /* Download button only shows when 'Allow Download' was
+                   checked at upload time. SuperAdmins can still hit the
+                   /download/{uuid} route directly if needed for moderation,
+                   but the button stays hidden so it never misleads users. */ ?>
+            <?php if (!empty($media['is_downloadable']) && $canDownload): ?>
                 <a class="btn-primary" href="<?= url('/download/' . $media['uuid']) ?>">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
                     Download
